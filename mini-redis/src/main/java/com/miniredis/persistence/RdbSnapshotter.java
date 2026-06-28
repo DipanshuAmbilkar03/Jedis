@@ -7,72 +7,170 @@ import com.miniredis.store.RedisObject;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.zip.CRC32;
+import java.util.zip.CheckedInputStream;
+import java.util.zip.CheckedOutputStream;
 
 /**
- * RDB Snapshotter — periodically dumps the entire in-memory store to a JSON file.
+ * RDB Snapshotter — dumps the entire in-memory store to a compressed binary format (MRDB).
  * 
  * Provides fast recovery on startup (load the full snapshot at once).
- * Simpler than real Redis binary RDB format — uses human-readable JSON.
+ * Implements Magic Header, Versioning, and CRC32 Checksum verification.
  */
 public class RdbSnapshotter {
 
+    private static final byte[] MAGIC_HEADER = {'M', 'R', 'D', 'B'};
+    private static final short VERSION = 1;
+
     private final String filePath;
     private final DataStore dataStore;
+
+    private final java.util.concurrent.ExecutorService bgExecutor = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "mini-redis-bgsave");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile boolean isSaving = false;
 
     public RdbSnapshotter(String filePath, DataStore dataStore) {
         this.filePath = filePath;
         this.dataStore = dataStore;
     }
 
-    /**
-     * Save the entire store to a JSON snapshot file.
-     */
+    public String getFilePath() {
+        return filePath;
+    }
+
     public synchronized void save() {
+        Map<String, RedisObject> storeCopy = new HashMap<>();
+        for (String key : dataStore.getRawStore().keySet()) {
+            RedisObject obj = dataStore.get(key);
+            if (obj != null) {
+                storeCopy.put(key, obj);
+            }
+        }
+        Map<String, Long> expiryMapCopy = new HashMap<>(dataStore.getExpiryManager().getRawExpiryMap());
+        performSave(storeCopy, expiryMapCopy);
+    }
+
+    /**
+     * Save the database to a binary snapshot in the background.
+     */
+    public synchronized boolean backgroundSave() {
+        if (isSaving) {
+            System.out.println("[RDB] Background save is already in progress.");
+            return false;
+        }
+        isSaving = true;
+        System.out.println("[RDB] Background saving started.");
+
+        Map<String, RedisObject> storeCopy = new HashMap<>();
+        for (String key : dataStore.getRawStore().keySet()) {
+            RedisObject obj = dataStore.get(key);
+            if (obj != null) {
+                storeCopy.put(key, obj);
+            }
+        }
+        Map<String, Long> expiryMapCopy = new HashMap<>(dataStore.getExpiryManager().getRawExpiryMap());
+
+        bgExecutor.submit(() -> {
+            try {
+                performSave(storeCopy, expiryMapCopy);
+            } finally {
+                isSaving = false;
+            }
+        });
+        return true;
+    }
+
+    public boolean isSaving() {
+        return isSaving;
+    }
+
+    public void shutdown() {
+        bgExecutor.shutdown();
+        try {
+            if (!bgExecutor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                bgExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            bgExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void performSave(Map<String, RedisObject> store, Map<String, Long> expiryMap) {
         try {
             // Write to a temp file first, then rename (atomic)
             String tempPath = filePath + ".tmp";
+            CRC32 crc = new CRC32();
 
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempPath))) {
-                writer.write("{\n");
+            try (FileOutputStream fos = new FileOutputStream(tempPath);
+                 BufferedOutputStream bos = new BufferedOutputStream(fos);
+                 CheckedOutputStream cos = new CheckedOutputStream(bos, crc);
+                 DataOutputStream dos = new DataOutputStream(cos)) {
 
-                var store = dataStore.getRawStore();
-                var expiryMap = dataStore.getExpiryManager().getRawExpiryMap();
-                Iterator<Map.Entry<String, RedisObject>> it = store.entrySet().iterator();
+                // 1. Write Header
+                dos.write(MAGIC_HEADER);
+                dos.writeShort(VERSION);
 
-                boolean first = true;
-                while (it.hasNext()) {
-                    Map.Entry<String, RedisObject> entry = it.next();
+                // Count active non-expired keys first
+                int activeKeyCount = 0;
+                long now = System.currentTimeMillis();
+                for (Map.Entry<String, RedisObject> entry : store.entrySet()) {
+                    String key = entry.getKey();
+                    Long expiry = expiryMap.get(key);
+                    if (expiry == null || expiry > now) {
+                        activeKeyCount++;
+                    }
+                }
+
+                // 2. Write Key Count
+                dos.writeInt(activeKeyCount);
+
+                // 3. Write Data Entries
+                for (Map.Entry<String, RedisObject> entry : store.entrySet()) {
                     String key = entry.getKey();
                     RedisObject obj = entry.getValue();
 
-                    // Skip expired keys
-                    if (dataStore.getExpiryManager().isExpired(key)) {
-                        continue;
-                    }
-
-                    if (!first) writer.write(",\n");
-                    first = false;
-
-                    writer.write("  " + jsonString(key) + ": {\n");
-                    writer.write("    \"type\": " + jsonString(obj.getType().name()) + ",\n");
-                    writer.write("    \"value\": " + serializeValue(obj) + "\n");
-
-                    // Write expiry if present
                     Long expiry = expiryMap.get(key);
-                    if (expiry != null) {
-                        writer.write("    ,\"expiry\": " + expiry + "\n");
+                    if (expiry != null && expiry <= now) {
+                        continue; // Skip expired keys
                     }
 
-                    writer.write("  }");
+                    // a. Expiry flag & value
+                    if (expiry != null) {
+                        dos.writeByte(1); // Has expiry
+                        dos.writeLong(expiry);
+                    } else {
+                        dos.writeByte(0); // No expiry
+                    }
+
+                    // b. DataType tag
+                    DataType type = obj.getType();
+                    dos.writeByte(typeToByte(type));
+
+                    // c. Key
+                    byte[] keyBytes = key.getBytes("UTF-8");
+                    dos.writeInt(keyBytes.length);
+                    dos.write(keyBytes);
+
+                    // d. Value payload
+                    serializeValue(dos, obj);
                 }
 
-                writer.write("\n}\n");
+                // Flush buffer before fetching checksum
+                dos.flush();
+                long checksum = crc.getValue();
+
+                // 4. Write Checksum
+                dos.writeLong(checksum);
             }
 
             // Atomic rename
             Files.move(Path.of(tempPath), Path.of(filePath), StandardCopyOption.REPLACE_EXISTING);
 
-            System.out.println("[RDB] Snapshot saved: " + dataStore.getRawStore().size() + " keys → " + filePath);
+            System.out.println("[RDB] Background snapshot saved: " + store.size() + " keys → " + filePath);
         } catch (IOException e) {
             System.err.println("[RDB] Snapshot failed: " + e.getMessage());
         }
@@ -87,308 +185,189 @@ public class RdbSnapshotter {
             return;
         }
 
-        try {
-            String content = Files.readString(path).trim();
-            if (content.isEmpty() || content.equals("{}")) {
-                return;
+        CRC32 crc = new CRC32();
+        try (FileInputStream fis = new FileInputStream(filePath);
+             BufferedInputStream bis = new BufferedInputStream(fis);
+             CheckedInputStream cis = new CheckedInputStream(bis, crc);
+             DataInputStream dis = new DataInputStream(cis)) {
+
+            // 1. Read and Validate Header
+            byte[] magic = new byte[4];
+            dis.readFully(magic);
+            if (!Arrays.equals(magic, MAGIC_HEADER)) {
+                throw new IOException("Invalid RDB magic header");
             }
 
-            // Simple JSON parser for our known format
-            parseSnapshot(content);
+            short version = dis.readShort();
+            if (version != VERSION) {
+                throw new IOException("Unsupported RDB format version: " + version);
+            }
+
+            // 2. Read Key Count
+            int keyCount = dis.readInt();
+            int keysLoaded = 0;
+
+            // 3. Read Data Entries
+            for (int i = 0; i < keyCount; i++) {
+                // a. Expiry metadata
+                byte hasExpiry = dis.readByte();
+                long expiry = -1;
+                if (hasExpiry == 1) {
+                    expiry = dis.readLong();
+                }
+
+                // b. DataType
+                byte typeByte = dis.readByte();
+                DataType type = byteToType(typeByte);
+
+                // c. Key
+                int keyLen = dis.readInt();
+                byte[] keyBytes = new byte[keyLen];
+                dis.readFully(keyBytes);
+                String key = new String(keyBytes, "UTF-8");
+
+                // d. Value
+                RedisObject obj = deserializeValue(dis, type);
+
+                // Add to DataStore if not expired
+                if (hasExpiry == 0 || expiry > System.currentTimeMillis()) {
+                    dataStore.set(key, obj);
+                    if (hasExpiry == 1) {
+                        dataStore.getExpiryManager().setExpiry(key, expiry);
+                    }
+                    keysLoaded++;
+                }
+            }
+
+            // 4. Verify Checksum
+            long computedChecksum = crc.getValue();
+            long storedChecksum = dis.readLong();
+            if (computedChecksum != storedChecksum) {
+                throw new IOException("RDB Checksum validation failed! Data may be corrupted.");
+            }
+
+            if (keysLoaded > 0) {
+                System.out.println("[RDB] Loaded " + keysLoaded + " keys from " + filePath);
+            }
 
         } catch (IOException e) {
             System.err.println("[RDB] Failed to load snapshot: " + e.getMessage());
         }
     }
 
-    // ── Serialization ──
+    // ── Helper Serialization/Deserialization Methods ──
 
-    private String serializeValue(RedisObject obj) {
-        return switch (obj.getType()) {
-            case STRING -> jsonString(obj.getStringValue());
-            case LIST -> jsonStringArray(obj.getListValue());
-            case SET -> jsonStringArray(new ArrayList<>(obj.getSetValue()));
-            case HASH -> jsonStringMap(obj.getHashValue());
+    private byte typeToByte(DataType type) {
+        return switch (type) {
+            case STRING -> (byte) 1;
+            case LIST -> (byte) 2;
+            case SET -> (byte) 3;
+            case HASH -> (byte) 4;
         };
     }
 
-    // ── Simple JSON helpers (no dependency needed) ──
-
-    private String jsonString(String s) {
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
+    private DataType byteToType(byte b) throws IOException {
+        return switch (b) {
+            case 1 -> DataType.STRING;
+            case 2 -> DataType.LIST;
+            case 3 -> DataType.SET;
+            case 4 -> DataType.HASH;
+            default -> throw new IOException("Unknown byte data type: " + b);
+        };
     }
 
-    private String jsonStringArray(List<String> list) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < list.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(jsonString(list.get(i)));
-        }
-        sb.append("]");
-        return sb.toString();
-    }
-
-    private String jsonStringMap(Map<String, String> map) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, String> entry : map.entrySet()) {
-            if (!first) sb.append(", ");
-            first = false;
-            sb.append(jsonString(entry.getKey())).append(": ").append(jsonString(entry.getValue()));
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-
-    // ── Simple JSON Parser ──
-
-    private void parseSnapshot(String content) {
-        // Remove outer braces
-        content = content.trim();
-        if (content.startsWith("{")) content = content.substring(1);
-        if (content.endsWith("}")) content = content.substring(0, content.length() - 1);
-
-        int pos = 0;
-        int keysLoaded = 0;
-
-        while (pos < content.length()) {
-            // Skip whitespace
-            while (pos < content.length() && Character.isWhitespace(content.charAt(pos))) pos++;
-            if (pos >= content.length()) break;
-
-            // Skip comma
-            if (content.charAt(pos) == ',') {
-                pos++;
-                continue;
+    private void serializeValue(DataOutputStream dos, RedisObject obj) throws IOException {
+        switch (obj.getType()) {
+            case STRING -> {
+                byte[] bytes = obj.getStringValue().getBytes("UTF-8");
+                dos.writeInt(bytes.length);
+                dos.write(bytes);
             }
-
-            // Read key
-            if (content.charAt(pos) != '"') break;
-            int keyEnd = findClosingQuote(content, pos);
-            if (keyEnd == -1) break;
-            String key = unescapeJsonString(content.substring(pos + 1, keyEnd));
-            pos = keyEnd + 1;
-
-            // Skip colon and whitespace
-            while (pos < content.length() && (content.charAt(pos) == ':' || Character.isWhitespace(content.charAt(pos)))) pos++;
-
-            // Read the object block
-            if (pos >= content.length() || content.charAt(pos) != '{') break;
-            int blockEnd = findMatchingBrace(content, pos);
-            if (blockEnd == -1) break;
-
-            String block = content.substring(pos + 1, blockEnd);
-            pos = blockEnd + 1;
-
-            try {
-                parseKeyBlock(key, block);
-                keysLoaded++;
-            } catch (Exception e) {
-                System.err.println("[RDB] Skipping key '" + key + "': " + e.getMessage());
-            }
-        }
-
-        if (keysLoaded > 0) {
-            System.out.println("[RDB] Loaded " + keysLoaded + " keys from " + filePath);
-        }
-    }
-
-    private void parseKeyBlock(String key, String block) {
-        // Extract type
-        String type = extractJsonStringValue(block, "type");
-        String valueStr = extractRawValue(block, "value");
-
-        if (type == null || valueStr == null) return;
-
-        DataType dataType = DataType.valueOf(type);
-        RedisObject obj = switch (dataType) {
-            case STRING -> RedisObject.string(parseJsonString(valueStr));
             case LIST -> {
-                RedisObject listObj = RedisObject.list();
-                List<String> items = parseJsonStringArray(valueStr);
-                listObj.getListValue().addAll(items);
-                yield listObj;
+                var list = obj.getListValue();
+                dos.writeInt(list.size());
+                for (String item : list) {
+                    byte[] bytes = item.getBytes("UTF-8");
+                    dos.writeInt(bytes.length);
+                    dos.write(bytes);
+                }
             }
             case SET -> {
-                RedisObject setObj = RedisObject.set();
-                List<String> items = parseJsonStringArray(valueStr);
-                setObj.getSetValue().addAll(items);
-                yield setObj;
+                var set = obj.getSetValue();
+                dos.writeInt(set.size());
+                for (String item : set) {
+                    byte[] bytes = item.getBytes("UTF-8");
+                    dos.writeInt(bytes.length);
+                    dos.write(bytes);
+                }
             }
             case HASH -> {
-                RedisObject hashObj = RedisObject.hash();
-                Map<String, String> map = parseJsonStringMap(valueStr);
-                hashObj.getHashValue().putAll(map);
-                yield hashObj;
-            }
-        };
+                var map = obj.getHashValue();
+                dos.writeInt(map.size());
+                for (Map.Entry<String, String> entry : map.entrySet()) {
+                    byte[] fBytes = entry.getKey().getBytes("UTF-8");
+                    dos.writeInt(fBytes.length);
+                    dos.write(fBytes);
 
-        dataStore.set(key, obj);
-
-        // Load expiry
-        String expiryStr = extractRawValue(block, "expiry");
-        if (expiryStr != null) {
-            long expiry = Long.parseLong(expiryStr.trim());
-            if (expiry > System.currentTimeMillis()) {
-                dataStore.getExpiryManager().setExpiry(key, expiry);
-            }
-        }
-    }
-
-    // ── JSON parsing helpers ──
-
-    private int findClosingQuote(String s, int openPos) {
-        for (int i = openPos + 1; i < s.length(); i++) {
-            if (s.charAt(i) == '\\') {
-                i++; // skip escaped char
-            } else if (s.charAt(i) == '"') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private int findMatchingBrace(String s, int openPos) {
-        int depth = 0;
-        boolean inString = false;
-        for (int i = openPos; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '\\' && inString) {
-                i++;
-                continue;
-            }
-            if (c == '"') inString = !inString;
-            if (!inString) {
-                if (c == '{') depth++;
-                if (c == '}') {
-                    depth--;
-                    if (depth == 0) return i;
+                    byte[] vBytes = entry.getValue().getBytes("UTF-8");
+                    dos.writeInt(vBytes.length);
+                    dos.write(vBytes);
                 }
             }
         }
-        return -1;
     }
 
-    private String extractJsonStringValue(String block, String key) {
-        String pattern = "\"" + key + "\"";
-        int idx = block.indexOf(pattern);
-        if (idx == -1) return null;
-        idx += pattern.length();
-        // Skip : and whitespace
-        while (idx < block.length() && (block.charAt(idx) == ':' || block.charAt(idx) == ' ')) idx++;
-        if (idx >= block.length() || block.charAt(idx) != '"') return null;
-        int end = findClosingQuote(block, idx);
-        if (end == -1) return null;
-        return unescapeJsonString(block.substring(idx + 1, end));
-    }
-
-    private String extractRawValue(String block, String key) {
-        String pattern = "\"" + key + "\"";
-        int idx = block.indexOf(pattern);
-        if (idx == -1) return null;
-        idx += pattern.length();
-        // Skip : and whitespace
-        while (idx < block.length() && (block.charAt(idx) == ':' || block.charAt(idx) == ' ')) idx++;
-        if (idx >= block.length()) return null;
-
-        char first = block.charAt(idx);
-        if (first == '"') {
-            int end = findClosingQuote(block, idx);
-            return end != -1 ? block.substring(idx, end + 1) : null;
-        } else if (first == '[') {
-            int end = findMatchingBracket(block, idx);
-            return end != -1 ? block.substring(idx, end + 1) : null;
-        } else if (first == '{') {
-            int end = findMatchingBrace(block, idx);
-            return end != -1 ? block.substring(idx, end + 1) : null;
-        } else {
-            // Number or other literal
-            int end = idx;
-            while (end < block.length() && block.charAt(end) != ',' && block.charAt(end) != '\n' && block.charAt(end) != '}') end++;
-            return block.substring(idx, end).trim();
-        }
-    }
-
-    private int findMatchingBracket(String s, int openPos) {
-        int depth = 0;
-        boolean inString = false;
-        for (int i = openPos; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '\\' && inString) { i++; continue; }
-            if (c == '"') inString = !inString;
-            if (!inString) {
-                if (c == '[') depth++;
-                if (c == ']') { depth--; if (depth == 0) return i; }
+    private RedisObject deserializeValue(DataInputStream dis, DataType type) throws IOException {
+        return switch (type) {
+            case STRING -> {
+                int len = dis.readInt();
+                byte[] bytes = new byte[len];
+                dis.readFully(bytes);
+                yield RedisObject.string(new String(bytes, "UTF-8"));
             }
-        }
-        return -1;
-    }
-
-    private String parseJsonString(String s) {
-        s = s.trim();
-        if (s.startsWith("\"") && s.endsWith("\"")) {
-            s = s.substring(1, s.length() - 1);
-        }
-        return unescapeJsonString(s);
-    }
-
-    private List<String> parseJsonStringArray(String s) {
-        s = s.trim();
-        if (s.startsWith("[")) s = s.substring(1);
-        if (s.endsWith("]")) s = s.substring(0, s.length() - 1);
-
-        List<String> result = new ArrayList<>();
-        int pos = 0;
-        while (pos < s.length()) {
-            while (pos < s.length() && (s.charAt(pos) == ' ' || s.charAt(pos) == ',')) pos++;
-            if (pos >= s.length()) break;
-            if (s.charAt(pos) == '"') {
-                int end = findClosingQuote(s, pos);
-                if (end == -1) break;
-                result.add(unescapeJsonString(s.substring(pos + 1, end)));
-                pos = end + 1;
-            } else {
-                pos++;
+            case LIST -> {
+                int size = dis.readInt();
+                RedisObject listObj = RedisObject.list();
+                var list = listObj.getListValue();
+                for (int i = 0; i < size; i++) {
+                    int len = dis.readInt();
+                    byte[] bytes = new byte[len];
+                    dis.readFully(bytes);
+                    list.add(new String(bytes, "UTF-8"));
+                }
+                yield listObj;
             }
-        }
-        return result;
-    }
+            case SET -> {
+                int size = dis.readInt();
+                RedisObject setObj = RedisObject.set();
+                var set = setObj.getSetValue();
+                for (int i = 0; i < size; i++) {
+                    int len = dis.readInt();
+                    byte[] bytes = new byte[len];
+                    dis.readFully(bytes);
+                    set.add(new String(bytes, "UTF-8"));
+                }
+                yield setObj;
+            }
+            case HASH -> {
+                int size = dis.readInt();
+                RedisObject hashObj = RedisObject.hash();
+                var map = hashObj.getHashValue();
+                for (int i = 0; i < size; i++) {
+                    int fLen = dis.readInt();
+                    byte[] fBytes = new byte[fLen];
+                    dis.readFully(fBytes);
+                    String field = new String(fBytes, "UTF-8");
 
-    private Map<String, String> parseJsonStringMap(String s) {
-        s = s.trim();
-        if (s.startsWith("{")) s = s.substring(1);
-        if (s.endsWith("}")) s = s.substring(0, s.length() - 1);
+                    int vLen = dis.readInt();
+                    byte[] vBytes = new byte[vLen];
+                    dis.readFully(vBytes);
+                    String value = new String(vBytes, "UTF-8");
 
-        Map<String, String> result = new LinkedHashMap<>();
-        int pos = 0;
-        while (pos < s.length()) {
-            while (pos < s.length() && (s.charAt(pos) == ' ' || s.charAt(pos) == ',')) pos++;
-            if (pos >= s.length() || s.charAt(pos) != '"') break;
-
-            // Key
-            int keyEnd = findClosingQuote(s, pos);
-            if (keyEnd == -1) break;
-            String mapKey = unescapeJsonString(s.substring(pos + 1, keyEnd));
-            pos = keyEnd + 1;
-
-            // Skip : and whitespace
-            while (pos < s.length() && (s.charAt(pos) == ':' || s.charAt(pos) == ' ')) pos++;
-
-            // Value
-            if (pos >= s.length() || s.charAt(pos) != '"') break;
-            int valEnd = findClosingQuote(s, pos);
-            if (valEnd == -1) break;
-            String mapVal = unescapeJsonString(s.substring(pos + 1, valEnd));
-            pos = valEnd + 1;
-
-            result.put(mapKey, mapVal);
-        }
-        return result;
-    }
-
-    private String unescapeJsonString(String s) {
-        return s.replace("\\\"", "\"").replace("\\\\", "\\")
-                .replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t");
+                    map.put(field, value);
+                }
+                yield hashObj;
+            }
+        };
     }
 }

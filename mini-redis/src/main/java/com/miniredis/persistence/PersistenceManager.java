@@ -26,6 +26,8 @@ public class PersistenceManager {
     private AofEngine aofEngine;
     private RdbSnapshotter rdbSnapshotter;
     private ScheduledExecutorService rdbScheduler;
+    private ScheduledExecutorService aofScheduler;
+    private long lastRewriteSize = 0;
 
     public PersistenceManager(ServerConfig config, DataStore dataStore) {
         this.config = config;
@@ -85,13 +87,79 @@ public class PersistenceManager {
         int interval = config.getRdbSaveIntervalSeconds();
         rdbScheduler.scheduleAtFixedRate(() -> {
             try {
-                rdbSnapshotter.save();
+                rdbSnapshotter.backgroundSave();
             } catch (Exception e) {
                 System.err.println("[RDB] Snapshot failed: " + e.getMessage());
             }
         }, interval, interval, TimeUnit.SECONDS);
 
         System.out.println("[Persistence] RDB snapshots every " + interval + " seconds");
+    }
+
+    /**
+     * Start the background thread that checks AOF size and triggers auto-rewrites.
+     */
+    public void startAofAutoRewrite() {
+        if (aofEngine == null) {
+            return;
+        }
+
+        aofScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "mini-redis-aof-rewrite");
+            t.setDaemon(true);
+            return t;
+        });
+
+        // Initialize lastRewriteSize on startup
+        lastRewriteSize = aofEngine.getFileSize();
+
+        // Check AOF size every 30 seconds
+        aofScheduler.scheduleAtFixedRate(() -> {
+            try {
+                checkAndTriggerAofRewrite();
+            } catch (Exception e) {
+                System.err.println("[AOF] Auto-rewrite check failed: " + e.getMessage());
+            }
+        }, 30, 30, TimeUnit.SECONDS);
+
+        System.out.println("[Persistence] AOF auto-rewrite enabled (Min size: " + 
+                           config.getAofRewriteMinSize() + " bytes, Growth: " + 
+                           config.getAofRewriteGrowthPercent() + "%)");
+    }
+
+    private synchronized void checkAndTriggerAofRewrite() {
+        long currentSize = aofEngine.getFileSize();
+        long minSize = config.getAofRewriteMinSize();
+
+        if (currentSize < minSize) {
+            return; // AOF size is below threshold
+        }
+
+        long growth = currentSize - lastRewriteSize;
+        double growthPercent = lastRewriteSize == 0 ? 100.0 : ((double) growth / lastRewriteSize) * 100.0;
+
+        if (growthPercent >= config.getAofRewriteGrowthPercent()) {
+            System.out.println("[AOF] Auto-rewrite triggered. Current size: " + currentSize + 
+                               " bytes, Last rewrite size: " + lastRewriteSize + 
+                               " bytes (" + String.format("%.1f", growthPercent) + "% growth)");
+            aofEngine.rewrite(dataStore);
+            lastRewriteSize = aofEngine.getFileSize();
+        }
+    }
+
+    /**
+     * Trigger a background manual AOF rewrite (BGREWRITEAOF command).
+     */
+    public void bgRewriteAof() {
+        if (aofEngine == null) {
+            return;
+        }
+        new Thread(() -> {
+            aofEngine.rewrite(dataStore);
+            synchronized (this) {
+                lastRewriteSize = aofEngine.getFileSize();
+            }
+        }, "mini-redis-bgrewriteaof").start();
     }
 
     /**
@@ -113,6 +181,30 @@ public class PersistenceManager {
     }
 
     /**
+     * Trigger a background manual RDB snapshot (BGSAVE command).
+     */
+    public void bgSaveSnapshot() {
+        if (rdbSnapshotter != null) {
+            rdbSnapshotter.backgroundSave();
+        }
+    }
+
+    /**
+     * Check if a background save is currently in progress.
+     */
+    public boolean isBgSaveInProgress() {
+        return rdbSnapshotter != null && rdbSnapshotter.isSaving();
+    }
+
+    public RdbSnapshotter getSnapshotter() {
+        return rdbSnapshotter;
+    }
+
+    public String getSnapshotFile() {
+        return rdbSnapshotter != null ? rdbSnapshotter.getFilePath() : null;
+    }
+
+    /**
      * Graceful shutdown: flush AOF, take final snapshot.
      */
     public void shutdown() {
@@ -122,9 +214,14 @@ public class PersistenceManager {
             rdbScheduler.shutdown();
         }
 
+        if (aofScheduler != null) {
+            aofScheduler.shutdown();
+        }
+
         // Final snapshot
         if (rdbSnapshotter != null) {
             rdbSnapshotter.save();
+            rdbSnapshotter.shutdown(); // Stop background executor
             System.out.println("[Persistence] Final RDB snapshot saved.");
         }
 
