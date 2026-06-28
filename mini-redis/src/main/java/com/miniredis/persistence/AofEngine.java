@@ -226,6 +226,116 @@ public class AofEngine {
     }
 
     /**
+     * Get the size of the AOF file in bytes.
+     */
+    public long getFileSize() {
+        try {
+            Path path = Path.of(filePath);
+            if (Files.exists(path)) {
+                return Files.size(path);
+            }
+        } catch (IOException e) {
+            // Ignore
+        }
+        return 0;
+    }
+
+    /**
+     * Rewrite (compact) the AOF file.
+     */
+    public synchronized void rewrite(DataStore dataStore) {
+        System.out.println("[AOF] Starting AOF rewrite compaction...");
+        long start = System.currentTimeMillis();
+        close();
+
+        String tempPath = filePath + ".rewrite";
+        try {
+            try (BufferedWriter tempWriter = new BufferedWriter(new FileWriter(tempPath))) {
+                var store = dataStore.getRawStore();
+                var expiryMap = dataStore.getExpiryManager().getRawExpiryMap();
+                long now = System.currentTimeMillis();
+
+                for (String key : store.keySet()) {
+                    RedisObject obj = dataStore.get(key);
+                    if (obj == null) {
+                        continue;
+                    }
+
+                    // Skip expired keys
+                    Long expiry = expiryMap.get(key);
+                    if (expiry != null && expiry <= now) {
+                        continue;
+                    }
+
+                    List<String> args = new ArrayList<>();
+                    switch (obj.getType()) {
+                        case STRING -> {
+                            args.add("SET");
+                            args.add(key);
+                            args.add(obj.getStringValue());
+                            writeCommandToWriter(tempWriter, args);
+                        }
+                        case LIST -> {
+                            args.add("RPUSH");
+                            args.add(key);
+                            args.addAll(obj.getListValue());
+                            writeCommandToWriter(tempWriter, args);
+                        }
+                        case SET -> {
+                            args.add("SADD");
+                            args.add(key);
+                            args.addAll(obj.getSetValue());
+                            writeCommandToWriter(tempWriter, args);
+                        }
+                        case HASH -> {
+                            args.add("HSET");
+                            args.add(key);
+                            for (Map.Entry<String, String> fieldEntry : obj.getHashValue().entrySet()) {
+                                args.add(fieldEntry.getKey());
+                                args.add(fieldEntry.getValue());
+                            }
+                            writeCommandToWriter(tempWriter, args);
+                        }
+                    }
+
+                    // If key has TTL, write EXPIRE command
+                    if (expiry != null) {
+                        long remainingSeconds = (expiry - now) / 1000;
+                        if (remainingSeconds > 0) {
+                            List<String> expireArgs = List.of("EXPIRE", key, String.valueOf(remainingSeconds));
+                            writeCommandToWriter(tempWriter, expireArgs);
+                        }
+                    }
+                }
+            }
+
+            // Atomically rename temp rewrite file to main file
+            Files.move(Path.of(tempPath), Path.of(filePath), StandardCopyOption.REPLACE_EXISTING);
+            System.out.println("[AOF] AOF rewrite completed in " + (System.currentTimeMillis() - start) + " ms");
+        } catch (IOException e) {
+            System.err.println("[AOF] Rewrite failed: " + e.getMessage());
+            // Try to cleanup temp file if still exists
+            try {
+                Files.deleteIfExists(Path.of(tempPath));
+            } catch (IOException ioEx) {
+                // Ignore
+            }
+        } finally {
+            openWriter();
+        }
+    }
+
+    private void writeCommandToWriter(BufferedWriter w, List<String> args) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < args.size(); i++) {
+            if (i > 0) sb.append('\t');
+            sb.append(escapeValue(args.get(i)));
+        }
+        w.write(sb.toString());
+        w.newLine();
+    }
+
+    /**
      * Close the AOF writer.
      */
     public void close() {

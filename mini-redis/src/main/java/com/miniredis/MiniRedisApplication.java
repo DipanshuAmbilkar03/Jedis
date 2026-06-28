@@ -34,6 +34,9 @@ public class MiniRedisApplication {
 
         // ── Initialize Components ──
         DataStore dataStore = new DataStore();
+        dataStore.getMemoryManager().setMaxMemoryBytes(config.getMaxMemoryBytes());
+        dataStore.getMemoryManager().setEvictionPolicy(com.miniredis.memory.EvictionPolicy.fromString(config.getEvictionPolicy()));
+        dataStore.getMemoryManager().setSampleSize(config.getMaxMemorySamples());
         PubSubManager pubSubManager = new PubSubManager();
         PersistenceManager persistenceManager = new PersistenceManager(config, dataStore);
         CommandRouter commandRouter = new CommandRouter(dataStore, pubSubManager, persistenceManager);
@@ -52,6 +55,7 @@ public class MiniRedisApplication {
 
         // ── Start Periodic RDB Snapshots ──
         persistenceManager.startPeriodicSnapshots();
+        persistenceManager.startAofAutoRewrite();
 
         // ── Shutdown Hook ──
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -91,6 +95,49 @@ public class MiniRedisApplication {
                 }
                 case "--no-aof" -> config.setAofEnabled(false);
                 case "--no-rdb" -> config.setRdbEnabled(false);
+                case "--nio" -> config.setNioEnabled(true);
+                case "--tls-enabled" -> config.setTlsEnabled(true);
+                case "--tls-cert" -> {
+                    if (i + 1 < args.length) {
+                        config.setTlsCertPath(args[++i]);
+                    }
+                }
+                case "--tls-key" -> {
+                    if (i + 1 < args.length) {
+                        config.setTlsKeyPath(args[++i]);
+                    }
+                }
+                case "--tls-port" -> {
+                    if (i + 1 < args.length) {
+                        config.setTlsPort(Integer.parseInt(args[++i]));
+                    }
+                }
+                case "--replicaof" -> {
+                    if (i + 2 < args.length) {
+                        config.setReplicaOfHost(args[++i]);
+                        config.setReplicaOfPort(Integer.parseInt(args[++i]));
+                    }
+                }
+                case "--repl-backlog-size" -> {
+                    if (i + 1 < args.length) {
+                        config.setReplBacklogSize(Long.parseLong(args[++i]));
+                    }
+                }
+                case "--cluster-enabled" -> {
+                    if (i + 1 < args.length) {
+                        config.setClusterEnabled("yes".equalsIgnoreCase(args[++i]));
+                    }
+                }
+                case "--maxmemory" -> {
+                    if (i + 1 < args.length) {
+                        config.setMaxMemoryBytes(Long.parseLong(args[++i]));
+                    }
+                }
+                case "--eviction-policy" -> {
+                    if (i + 1 < args.length) {
+                        config.setEvictionPolicy(args[++i]);
+                    }
+                }
                 case "--help", "-h" -> {
                     printHelp();
                     System.exit(0);

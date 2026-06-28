@@ -4,6 +4,8 @@ import com.miniredis.command.CommandRouter;
 import com.miniredis.config.ServerConfig;
 import com.miniredis.persistence.PersistenceManager;
 import com.miniredis.pubsub.PubSubManager;
+import com.miniredis.replication.ReplicationManager;
+import com.miniredis.cluster.ClusterManager;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -25,10 +27,14 @@ public class RedisServer {
     private final PubSubManager pubSubManager;
     private final PersistenceManager persistenceManager;
     private final Set<ClientHandler> activeClients;
+    private final ReplicationManager replicationManager;
+    private final ClusterManager clusterManager;
 
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private volatile boolean running;
+    private NioEventLoop nioEventLoop;
+    private final ConnectionManager connectionManager;
 
     public RedisServer(ServerConfig config, CommandRouter commandRouter,
                        PubSubManager pubSubManager, PersistenceManager persistenceManager) {
@@ -37,13 +43,38 @@ public class RedisServer {
         this.pubSubManager = pubSubManager;
         this.persistenceManager = persistenceManager;
         this.activeClients = Collections.synchronizedSet(new LinkedHashSet<>());
+        this.connectionManager = new ConnectionManager(config);
+        this.replicationManager = new ReplicationManager(config);
+        this.commandRouter.setReplicationManager(this.replicationManager);
+        this.clusterManager = new ClusterManager(config);
+        this.commandRouter.setClusterManager(this.clusterManager);
     }
 
     /**
      * Start the TCP server and begin accepting connections.
      */
     public void start() throws IOException {
-        serverSocket = new ServerSocket(config.getPort());
+        connectionManager.startIdleMonitor();
+        replicationManager.start(commandRouter.getDataStore(), commandRouter, persistenceManager);
+
+        if (config.isNioEnabled()) {
+            nioEventLoop = new NioEventLoop(config, commandRouter, pubSubManager, persistenceManager, connectionManager, replicationManager);
+            running = true;
+            nioEventLoop.start();
+            return;
+        }
+
+        if (config.isTlsEnabled() && !config.isNioEnabled()) {
+            try {
+                var sslContext = com.miniredis.security.TlsConfig.createSSLContext(config);
+                var ssf = sslContext.getServerSocketFactory();
+                serverSocket = ssf.createServerSocket(config.getPort());
+            } catch (Exception e) {
+                throw new IOException("Failed to initialize SSLServerSocket: " + e.getMessage(), e);
+            }
+        } else {
+            serverSocket = new ServerSocket(config.getPort());
+        }
         threadPool = Executors.newFixedThreadPool(config.getMaxClients());
         running = true;
 
@@ -53,10 +84,19 @@ public class RedisServer {
             try {
                 Socket clientSocket = serverSocket.accept();
                 ClientHandler handler = new ClientHandler(
-                        clientSocket, commandRouter, pubSubManager, persistenceManager
+                        clientSocket, commandRouter, pubSubManager, persistenceManager, replicationManager
                 );
-                activeClients.add(handler);
-                threadPool.submit(handler);
+                if (connectionManager.acceptConnection(handler)) {
+                    activeClients.add(handler);
+                    threadPool.submit(handler);
+                } else {
+                    try {
+                        handler.sendRawResponse("-ERR max number of clients reached\r\n");
+                    } catch (IOException ioEx) {
+                        // Ignore
+                    }
+                    handler.cleanup();
+                }
             } catch (IOException e) {
                 if (running) {
                     System.err.println("[Server] Error accepting connection: " + e.getMessage());
@@ -72,6 +112,13 @@ public class RedisServer {
         running = false;
 
         System.out.println("[Server] Shutting down...");
+
+        connectionManager.stop();
+        replicationManager.stop();
+
+        if (nioEventLoop != null) {
+            nioEventLoop.stop();
+        }
 
         // Close server socket
         try {
@@ -94,9 +141,7 @@ public class RedisServer {
      * Get the number of currently connected clients.
      */
     public int getActiveClientCount() {
-        // Clean up disconnected clients
-        activeClients.removeIf(c -> !c.isConnected());
-        return activeClients.size();
+        return connectionManager.getActiveConnectionsCount();
     }
 
     private void printBanner() {
