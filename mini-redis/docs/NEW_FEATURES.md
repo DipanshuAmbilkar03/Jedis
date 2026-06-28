@@ -64,7 +64,7 @@ mvn clean test
 ### A. Testing Access Control Lists (ACL)
 1. Start the server on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399"
    ```
 2. Connect a client and create a new user:
    ```bash
@@ -85,11 +85,11 @@ mvn clean test
 ### B. Testing Replication
 1. Start a master node on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399"
    ```
 2. Start a replica node on port `6400` pointing to the master:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6400 --replicaof localhost 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6400 --replicaof localhost 6399"
    ```
 3. Connect to the master (`6399`) and write a key:
    ```bash
@@ -117,7 +117,7 @@ mvn clean test
 ### C. Testing Cluster Sharding
 1. Start a cluster-enabled node on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399 --cluster-enabled yes"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399 --cluster-enabled yes"
    ```
 2. Meet another node:
    ```
