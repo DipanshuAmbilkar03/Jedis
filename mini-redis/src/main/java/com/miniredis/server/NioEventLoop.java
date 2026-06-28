@@ -274,11 +274,11 @@ public class NioEventLoop {
         System.out.println("""
                 
                 ╔══════════════════════════════════════════╗
-                ║       ⚡ MINI REDIS NIO EVENT LOOP       ║
+                ║     MINI REDIS NIO EVENT LOOP            ║
                 ║    High-Speed Non-Blocking I/O           ║
                 ║                                          ║
                 ║    Port: %d                              ║
-                ║    PID:  %d                         ║
+                ║    PID:  %d                              ║
                 ║    Ready to scale to 100k+ clients       ║
                 ╚══════════════════════════════════════════╝
                 """.formatted(config.getPort(), ProcessHandle.current().pid()));

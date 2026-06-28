@@ -148,12 +148,12 @@ public class RedisServer {
         System.out.println("""
                 
                 ╔══════════════════════════════════════════╗
-                ║          🔴 MINI REDIS v1.0.0            ║
-                ║    In-Memory Key-Value Data Store         ║
+                ║         MINI REDIS v1.0.0                ║
+                ║  In-Memory Key-Value Data Store          ║
                 ║                                          ║
                 ║    Port: %d                              ║
-                ║    PID:  %d                         ║
-                ║    Ready to accept connections            ║
+                ║    PID:  %d                              ║
+                ║    Ready to accept connections           ║
                 ╚══════════════════════════════════════════╝
                 """.formatted(config.getPort(), ProcessHandle.current().pid()));
     }

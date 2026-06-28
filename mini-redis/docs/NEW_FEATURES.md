@@ -62,11 +62,15 @@ mvn clean test
 ## 3. Manual Verification Walks
 
 ### A. Testing Access Control Lists (ACL)
-1. Start the server:
+1. Start the server on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication"
+   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
    ```
 2. Connect a client and create a new user:
+   ```bash
+   redis-cli -p 6399
+   ```
+   *Then inside the prompt:*
    ```
    ACL SETUSER alice on >password123 +GET
    ```
@@ -79,19 +83,27 @@ mvn clean test
    * `SET somekey val` -> returns `-NOPERM this user has no permissions to run the 'set' command` (Blocked)
 
 ### B. Testing Replication
-1. Start a master node on port `6379`:
+1. Start a master node on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -- --port 6379
+   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
    ```
-2. Start a replica node on port `6380` pointing to the master:
+2. Start a replica node on port `6400` pointing to the master:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -- --port 6380 --replicaof localhost 6379
+   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6400 --replicaof localhost 6399"
    ```
-3. Connect to the master (`6379`) and write a key:
+3. Connect to the master (`6399`) and write a key:
+   ```bash
+   redis-cli -p 6399
+   ```
+   *Then run:*
    ```
    SET hello "world"
    ```
-4. Connect to the replica (`6380`) and read the key:
+4. Connect to the replica (`6400`) and read the key:
+   ```bash
+   redis-cli -p 6400
+   ```
+   *Then run:*
    ```
    GET hello
    ```
@@ -103,15 +115,15 @@ mvn clean test
    *Should return `-READONLY You can't write against a read only replica.`*
 
 ### C. Testing Cluster Sharding
-1. Start a cluster-enabled node:
+1. Start a cluster-enabled node on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -- --port 6379 --cluster-enabled yes
+   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399 --cluster-enabled yes"
    ```
 2. Meet another node:
    ```
-   CLUSTER MEET localhost 6380
+   CLUSTER MEET localhost 6400
    ```
 3. Assign slot `100` to a remote node:
    *(Send to node B)*
 4. Execute key operation mapping to slot 100 on the master:
-   *Should return `-MOVED 100 127.0.0.1:6380` redirect.*
+   *Should return `-MOVED 100 127.0.0.1:6400` redirect.*
