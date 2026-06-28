@@ -79,7 +79,7 @@ mvn clean compile
 ### Step 2: Try ACL Security
 1. Start the server on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399"
    ```
 2. Open another terminal and connect to it using a Redis client:
    ```bash
@@ -101,11 +101,11 @@ mvn clean compile
 1. Stop any running servers.
 2. Start the Master server on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399"
    ```
 3. Open a new terminal and start the Replica on port `6400` pointing to the Master:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6400 --replicaof localhost 6399"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6400 --replicaof localhost 6399"
    ```
 4. Connect to the Master on port `6399` using `redis-cli -p 6399` and write a key:
    ```
@@ -121,7 +121,7 @@ mvn clean compile
 1. Stop any running servers.
 2. Start a cluster-enabled server on port `6399`:
    ```bash
-   mvn exec:java -Dexec.mainClass="com.miniredis.MiniRedisApplication" -Dexec.args="--port 6399 --cluster-enabled yes"
+   mvn exec:java "-Dexec.mainClass=com.miniredis.MiniRedisApplication" "-Dexec.args=--port 6399 --cluster-enabled yes"
    ```
 3. Open another terminal and connect using `redis-cli`:
    ```bash
