@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jedis — A Redis Clone Built from Scratch in Pure Java</title>
+  <meta name="description" content="A fully functional in-memory key-value data store built from scratch in pure Java. Implements the real Redis RESP2 protocol with 25+ commands, zero external dependencies." />
+  <meta name="keywords" content="Redis, Java, Mini Redis, Key-Value Store, In-Memory Database, RESP2 Protocol" />
+  <meta name="author" content="Dipanshu Ambilkar" />
+  <meta name="theme-color" content="#0a0a0f" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ====================== NAVBAR ====================== -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">Jedis</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#architecture" class="nav-link">Architecture</a></li>
+        <li><a href="#commands" class="nav-link">Commands</a></li>
+        <li><a href="#tech" class="nav-link">Tech Stack</a></li>
+      </ul>
+      <a href="https://github.com/DipanshuAmbilkar03/Jedis" target="_blank" class="nav-cta">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ====================== HERO / FRAME ANIMATION ====================== -->
+  <section class="hero-section" id="hero">
+    <div class="frame-animation-wrapper">
+      <canvas id="frameCanvas"></canvas>
+      <!-- Overlay content that fades in/out based on scroll -->
+      <div class="hero-overlay" id="heroOverlay">
+        <div class="hero-content">
+          <div class="hero-badge">
+            <span class="badge-dot"></span>
+            <span>Pure Java • Zero Dependencies</span>
+          </div>
+          <h1 class="hero-title">
+            <span class="title-line">Build Your Own</span>
+            <span class="title-line title-gradient">Redis from Scratch</span>
+          </h1>
+          <p class="hero-subtitle">
+            A fully functional in-memory key-value data store implementing the real 
+            <strong>RESP2 protocol</strong>. Compatible with redis-cli, Jedis, and Lettuce.
+          </p>
+          <div class="hero-actions">
+            <a href="#features" class="btn btn-primary">
+              <span>Explore Features</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+            </a>
+            <a href="#commands" class="btn btn-ghost">
+              <span>Try Commands</span>
+            </a>
+          </div>
+          <div class="hero-stats">
+            <div class="stat">
+              <span class="stat-number" data-count="25">0</span><span class="stat-suffix">+</span>
+              <span class="stat-label">Commands</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+              <span class="stat-number" data-count="0">0</span>
+              <span class="stat-label">Dependencies</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+              <span class="stat-number" data-count="3000">0</span><span class="stat-suffix">+</span>
+              <span class="stat-label">Lines of Code</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+              <span class="stat-number" data-count="4">0</span>
+              <span class="stat-label">Data Types</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Scroll indicator -->
+      <div class="scroll-indicator" id="scrollIndicator">
+        <span>Scroll to explore</span>
+        <div class="scroll-arrow">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== FEATURES ====================== -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Features</span>
+        <h2 class="section-title">Everything Redis Can Do,<br/><span class="text-gradient">Built From First Principles</span></h2>
+        <p class="section-desc">Every byte of the TCP parser, protocol encoder, persistence engine, and thread pool is hand-written in pure Java.</p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3 class="feature-title">In-Memory Data Store</h3>
+          <p class="feature-desc">Thread-safe <code>ConcurrentHashMap</code> storage with lock-free reads for blazing-fast operations on Strings, Lists, Sets, and Hashes.</p>
+          <div class="feature-tag">Core Engine</div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 class="feature-title">RESP2 Protocol</h3>
+          <p class="feature-desc">Full implementation of Redis Serialization Protocol v2 — binary-safe parsing and encoding that works with <code>redis-cli</code> out of the box.</p>
+          <div class="feature-tag">Protocol</div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </div>
+          <h3 class="feature-title">Key Expiration (TTL)</h3>
+          <p class="feature-desc">Dual expiry strategy — lazy deletion on access plus an active background cleanup thread using <code>ScheduledExecutorService</code>.</p>
+          <div class="feature-tag">Expiry Engine</div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <h3 class="feature-title">Pub/Sub Messaging</h3>
+          <p class="feature-desc">SUBSCRIBE, PUBLISH, UNSUBSCRIBE with fire-and-forget delivery. Real-time message broadcasting across connected clients.</p>
+          <div class="feature-tag">Messaging</div>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3 class="feature-title">Transactions</h3>
+          <p class="feature-desc">MULTI/EXEC/DISCARD command queuing. Batch commands atomically, just like the real Redis transaction model.</p>
+          <div class="feature-tag">Atomicity</div>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card" data-animate>
+          <div class="feature-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h3 class="feature-title">Dual Persistence</h3>
+          <p class="feature-desc">AOF (Append-Only File) for durability + RDB Snapshots for fast recovery. On startup, loads RDB then replays AOF.</p>
+          <div class="feature-tag">Durability</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== ARCHITECTURE ====================== -->
+  <section class="architecture-section" id="architecture">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Architecture</span>
+        <h2 class="section-title">Designed Like a <span class="text-gradient">Real Database Engine</span></h2>
+        <p class="section-desc">Clean, layered architecture with separation of concerns — from TCP socket handling to persistence layer.</p>
+      </div>
+
+      <div class="arch-flow">
+        <div class="arch-layer" data-animate>
+          <div class="arch-layer-header">
+            <div class="arch-layer-number">01</div>
+            <h3>TCP Listener</h3>
+          </div>
+          <p>Accepts multiple concurrent client connections via <code>ServerSocket</code>. Thread-per-client model with <code>ExecutorService</code> thread pool.</p>
+          <div class="arch-connector">
+            <svg width="24" height="40" viewBox="0 0 24 40" fill="none"><path d="M12 0v40" stroke="url(#grad1)" stroke-width="2" stroke-dasharray="4 4"/><defs><linearGradient id="grad1" x1="12" y1="0" x2="12" y2="40"><stop stop-color="#dc2626"/><stop offset="1" stop-color="#dc262600"/></linearGradient></defs></svg>
+          </div>
+        </div>
+
+        <div class="arch-layer" data-animate>
+          <div class="arch-layer-header">
+            <div class="arch-layer-number">02</div>
+            <h3>RESP2 Protocol Parser</h3>
+          </div>
+          <p>Hand-written binary-safe parser and encoder. Supports Simple Strings, Errors, Integers, Bulk Strings, and Arrays.</p>
+          <div class="arch-connector">
+            <svg width="24" height="40" viewBox="0 0 24 40" fill="none"><path d="M12 0v40" stroke="url(#grad2)" stroke-width="2" stroke-dasharray="4 4"/><defs><linearGradient id="grad2" x1="12" y1="0" x2="12" y2="40"><stop stop-color="#dc2626"/><stop offset="1" stop-color="#dc262600"/></linearGradient></defs></svg>
+          </div>
+        </div>
+
+        <div class="arch-layer" data-animate>
+          <div class="arch-layer-header">
+            <div class="arch-layer-number">03</div>
+            <h3>Command Router</h3>
+          </div>
+          <p>Dispatches parsed commands to the appropriate handler — Strings, Lists, Sets, Hashes, Keys, PubSub, Transactions, Server.</p>
+          <div class="arch-connector">
+            <svg width="24" height="40" viewBox="0 0 24 40" fill="none"><path d="M12 0v40" stroke="url(#grad3)" stroke-width="2" stroke-dasharray="4 4"/><defs><linearGradient id="grad3" x1="12" y1="0" x2="12" y2="40"><stop stop-color="#dc2626"/><stop offset="1" stop-color="#dc262600"/></linearGradient></defs></svg>
+          </div>
+        </div>
+
+        <div class="arch-layer" data-animate>
+          <div class="arch-layer-header">
+            <div class="arch-layer-number">04</div>
+            <h3>Data Store Layer</h3>
+          </div>
+          <p><code>ConcurrentHashMap</code> backing store with <code>ExpiryManager</code> running background cleanup and lazy deletion on access.</p>
+          <div class="arch-connector">
+            <svg width="24" height="40" viewBox="0 0 24 40" fill="none"><path d="M12 0v40" stroke="url(#grad4)" stroke-width="2" stroke-dasharray="4 4"/><defs><linearGradient id="grad4" x1="12" y1="0" x2="12" y2="40"><stop stop-color="#dc2626"/><stop offset="1" stop-color="#dc262600"/></linearGradient></defs></svg>
+          </div>
+        </div>
+
+        <div class="arch-layer" data-animate>
+          <div class="arch-layer-header">
+            <div class="arch-layer-number">05</div>
+            <h3>Persistence Layer</h3>
+          </div>
+          <p>Dual persistence with AOF (write-ahead log) for durability and RDB (JSON snapshots) for fast point-in-time recovery.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== COMMANDS / TERMINAL ====================== -->
+  <section class="commands-section" id="commands">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Commands</span>
+        <h2 class="section-title">25+ Commands. <span class="text-gradient">Real Redis Protocol.</span></h2>
+        <p class="section-desc">Connect with <code>redis-cli -p 6380</code> and use it just like the real thing.</p>
+      </div>
+
+      <div class="terminal-showcase">
+        <div class="terminal" id="terminal">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <span class="terminal-title">redis-cli -p 6380</span>
+          </div>
+          <div class="terminal-body" id="terminalBody">
+            <!-- Lines will be populated by JS -->
+          </div>
+        </div>
+
+        <div class="commands-grid">
+          <div class="cmd-category" data-animate>
+            <h4>Strings</h4>
+            <div class="cmd-list">
+              <span class="cmd">SET</span><span class="cmd">GET</span><span class="cmd">MSET</span><span class="cmd">MGET</span><span class="cmd">INCR</span><span class="cmd">DECR</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Lists</h4>
+            <div class="cmd-list">
+              <span class="cmd">LPUSH</span><span class="cmd">RPUSH</span><span class="cmd">LPOP</span><span class="cmd">RPOP</span><span class="cmd">LRANGE</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Sets</h4>
+            <div class="cmd-list">
+              <span class="cmd">SADD</span><span class="cmd">SMEMBERS</span><span class="cmd">SREM</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Hashes</h4>
+            <div class="cmd-list">
+              <span class="cmd">HSET</span><span class="cmd">HGET</span><span class="cmd">HGETALL</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Keys</h4>
+            <div class="cmd-list">
+              <span class="cmd">DEL</span><span class="cmd">EXPIRE</span><span class="cmd">TTL</span><span class="cmd">KEYS</span><span class="cmd">EXISTS</span><span class="cmd">TYPE</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Pub/Sub</h4>
+            <div class="cmd-list">
+              <span class="cmd">SUBSCRIBE</span><span class="cmd">PUBLISH</span><span class="cmd">UNSUBSCRIBE</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Transactions</h4>
+            <div class="cmd-list">
+              <span class="cmd">MULTI</span><span class="cmd">EXEC</span><span class="cmd">DISCARD</span>
+            </div>
+          </div>
+          <div class="cmd-category" data-animate>
+            <h4>Server</h4>
+            <div class="cmd-list">
+              <span class="cmd">PING</span><span class="cmd">ECHO</span><span class="cmd">INFO</span><span class="cmd">SAVE</span><span class="cmd">FLUSHDB</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== TECH STACK ====================== -->
+  <section class="tech-section" id="tech">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Tech Stack</span>
+        <h2 class="section-title">Built With <span class="text-gradient">Pure Java</span></h2>
+        <p class="section-desc">No frameworks. No libraries. Just the JDK, raw sockets, and the command pattern.</p>
+      </div>
+
+      <div class="tech-grid">
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">☕</div>
+          <h4>Java 25</h4>
+          <p>Latest JDK with modern language features</p>
+        </div>
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">🌐</div>
+          <h4>TCP Sockets</h4>
+          <p><code>java.net.ServerSocket</code> for raw networking</p>
+        </div>
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">🧵</div>
+          <h4>Concurrency</h4>
+          <p><code>ConcurrentHashMap</code>, <code>ExecutorService</code>, Locks</p>
+        </div>
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">📡</div>
+          <h4>RESP2</h4>
+          <p>Hand-written parser & encoder for the wire protocol</p>
+        </div>
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">💾</div>
+          <h4>Persistence</h4>
+          <p>Custom AOF engine + JSON-based RDB snapshots</p>
+        </div>
+        <div class="tech-card" data-animate>
+          <div class="tech-card-icon">🔧</div>
+          <h4>Maven</h4>
+          <p>Build automation and dependency management</p>
+        </div>
+      </div>
+
+      <!-- Design Decisions -->
+      <div class="decisions-grid">
+        <div class="decision-card" data-animate>
+          <h4>Why Thread-per-Client?</h4>
+          <p>Simpler to understand, debug, and explain. Each client gets a dedicated thread from an ExecutorService thread pool. The data store itself is thread-safe via ConcurrentHashMap.</p>
+        </div>
+        <div class="decision-card" data-animate>
+          <h4>Why Dual Persistence?</h4>
+          <p>AOF = durability — every write is logged. RDB = performance — periodic snapshots are fast to load. On startup: load RDB first, then replay AOF for writes since last snapshot.</p>
+        </div>
+        <div class="decision-card" data-animate>
+          <h4>Why RESP2?</h4>
+          <p>Simple enough to implement from scratch, and gives free compatibility with redis-cli, Jedis, Lettuce, and every Redis client library. It's not a toy — it speaks a real protocol.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== CTA / QUICKSTART ====================== -->
+  <section class="cta-section" id="quickstart">
+    <div class="container">
+      <div class="cta-card" data-animate>
+        <div class="cta-glow"></div>
+        <h2>Get Started in 30 Seconds</h2>
+        <p>Clone, build, and connect — just three commands away.</p>
+        <div class="cta-terminal">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <span class="terminal-title">Terminal</span>
+          </div>
+          <div class="terminal-body cta-terminal-body">
+            <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">git clone https://github.com/DipanshuAmbilkar03/Jedis.git</span></div>
+            <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">cd mini-redis && mvn clean package</span></div>
+            <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">java -jar target/mini-redis-1.0.jar</span></div>
+            <div class="term-line term-output"><span class="term-success">✓</span> Mini Redis server started on port 6380</div>
+            <div class="term-line"><span class="term-prompt">$</span> <span class="term-cmd">redis-cli -p 6380</span></div>
+            <div class="term-line term-output">127.0.0.1:6380> <span class="term-cmd">PING</span></div>
+            <div class="term-line term-output"><span class="term-success">PONG</span></div>
+          </div>
+        </div>
+        <a href="https://github.com/DipanshuAmbilkar03/Jedis" target="_blank" class="btn btn-primary btn-large">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          <span>View on GitHub</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== FOOTER ====================== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <span class="logo-icon">⬡</span>
+          <span class="logo-text">Jedis</span>
+          <p>A systems project demonstrating deep understanding of databases, networking, concurrency, and protocol design.</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Project</h4>
+            <a href="#features">Features</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#commands">Commands</a>
+            <a href="#tech">Tech Stack</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="https://github.com/DipanshuAmbilkar03/Jedis" target="_blank">GitHub</a>
+            <a href="https://redis.io/docs/reference/protocol-spec/" target="_blank">RESP2 Spec</a>
+            <a href="https://redis.io/commands/" target="_blank">Redis Commands</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2026 Jedis — Built with ❤️ by Dipanshu Ambilkar</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
