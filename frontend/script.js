@@ -17,8 +17,8 @@
   // ─────────────────────────────────────────
   // CONFIG
   // ─────────────────────────────────────────
-  const FRAME_COUNT = 240;
-  const FRAME_STEP = 3;   // Skip every 2 frames (load 1, skip 2, load 4, skip 5...) -> 80 frames total
+  const FRAME_COUNT = 192;
+  const FRAME_STEP = 3;   // Skip every 2 frames -> 64 frames total
   const FRAME_PATH = '../UI/Frames/ezgif-frame-';
   const CONCURRENCY = 8;  // concurrent frame loads
 
