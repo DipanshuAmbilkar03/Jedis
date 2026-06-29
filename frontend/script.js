@@ -18,11 +18,22 @@
   // CONFIG
   // ─────────────────────────────────────────
   const FRAME_COUNT = 240;
+  const FRAME_STEP = 3;   // Skip every 2 frames (load 1, skip 2, load 4, skip 5...) -> 80 frames total
   const FRAME_PATH = '../UI/Frames/ezgif-frame-';
-  const CONCURRENCY = 6;  // concurrent frame loads
+  const CONCURRENCY = 8;  // concurrent frame loads
+
+  // Generate the subset of frame indices we want to load
+  const loadedIndices = [];
+  for (let i = 0; i < FRAME_COUNT; i += FRAME_STEP) {
+    loadedIndices.push(i);
+  }
+  // Ensure the final frame is always included for a complete animation
+  if (loadedIndices[loadedIndices.length - 1] !== FRAME_COUNT - 1) {
+    loadedIndices.push(FRAME_COUNT - 1);
+  }
 
   // ─────────────────────────────────────────
-  // FRAME ANIMATION ENGINE
+  // FRAME FRAME ENGINE
   // ─────────────────────────────────────────
   const canvas = document.getElementById('frameCanvas');
   const ctx = canvas.getContext('2d');
@@ -32,6 +43,7 @@
 
   const frames = new Array(FRAME_COUNT);
   let currentFrame = -1;
+  let lastDrawnFrameIndex = -1;
   let loadedCount = 0;
   let firstFrameLoaded = false;
 
@@ -47,6 +59,7 @@
       img.onload = () => {
         frames[index] = img;
         loadedCount++;
+        // If first frame loaded, draw immediately to avoid a blank screen
         if (index === 0 && !firstFrameLoaded) {
           firstFrameLoaded = true;
           resizeCanvas();
@@ -64,21 +77,13 @@
 
   // Load frames with a concurrency pool
   async function loadAllFrames() {
-    const queue = Array.from({ length: FRAME_COUNT }, (_, i) => i);
-    
-    // Prioritize: first, last, then interleaved
-    const priority = [0];
-    const step = Math.floor(FRAME_COUNT / 20);
-    for (let i = step; i < FRAME_COUNT; i += step) {
-      priority.push(i);
-    }
-    priority.push(FRAME_COUNT - 1);
-    
-    // Move priority frames to front
+    // Prioritize first and last frames, then the rest of our subset
+    const priority = [0, FRAME_COUNT - 1];
     const prioritySet = new Set(priority);
+    
     const reordered = [
       ...priority,
-      ...queue.filter(i => !prioritySet.has(i))
+      ...loadedIndices.filter(i => !prioritySet.has(i))
     ];
 
     let cursor = 0;
@@ -90,15 +95,17 @@
     }
 
     const workers = [];
-    for (let i = 0; i < CONCURRENCY; i++) {
+    const actualConcurrency = Math.min(CONCURRENCY, reordered.length);
+    for (let i = 0; i < actualConcurrency; i++) {
       workers.push(next());
     }
     await Promise.all(workers);
   }
 
-  // Resize canvas to match viewport at full physical resolution
+  // Resize canvas to match viewport at optimized physical resolution
   function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
+    // Cap DPR at 1.5 to dramatically reduce canvas resolution (and fill rate) on high-DPI screens
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     canvas.width = Math.round(window.innerWidth * dpr);
     canvas.height = Math.round(window.innerHeight * dpr);
     canvas.style.width = `${window.innerWidth}px`;
@@ -107,17 +114,31 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
     // Redraw current frame
-    if (currentFrame >= 0 && frames[currentFrame]) {
+    if (currentFrame >= 0) {
       drawFrame(currentFrame);
     }
   }
 
   // Draw a frame with cover logic — operates in physical pixel space
   function drawFrame(index) {
-    const img = frames[index];
-    if (!img) return;
+    let img = frames[index];
+    
+    // Graceful fallback: if target frame isn't loaded, use the last successfully drawn one
+    if (!img) {
+      if (lastDrawnFrameIndex >= 0 && frames[lastDrawnFrameIndex]) {
+        img = frames[lastDrawnFrameIndex];
+      } else {
+        // Fallback to first frame if nothing drawn yet
+        img = frames[0];
+      }
+    }
+
+    if (!img) return; // Nothing loaded yet
 
     currentFrame = index;
+    if (frames[index]) {
+      lastDrawnFrameIndex = index;
+    }
 
     // Use full physical pixel dimensions for crisp rendering
     const cw = canvas.width;
@@ -140,7 +161,7 @@
     }
 
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingQuality = 'medium'; // 'medium' is faster than 'high' and visually identical
     ctx.clearRect(0, 0, cw, ch);
     ctx.drawImage(img, dx, dy, drawW, drawH);
   }
@@ -155,12 +176,14 @@
     const scrolled = -rect.top;
     const progress = Math.max(0, Math.min(1, scrolled / scrollableHeight));
 
-    const frameIndex = Math.min(
-      FRAME_COUNT - 1,
-      Math.max(0, Math.floor(progress * (FRAME_COUNT - 1)))
+    // Map progress to our list of loaded keyframes
+    const targetKeyframeIdx = Math.min(
+      loadedIndices.length - 1,
+      Math.max(0, Math.floor(progress * (loadedIndices.length - 1)))
     );
+    const frameIndex = loadedIndices[targetKeyframeIdx];
 
-    if (frameIndex !== currentFrame && frames[frameIndex]) {
+    if (frameIndex !== currentFrame) {
       drawFrame(frameIndex);
     }
 
