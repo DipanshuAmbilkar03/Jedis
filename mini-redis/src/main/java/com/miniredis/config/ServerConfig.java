@@ -34,6 +34,10 @@ public class ServerConfig {
     private long replBacklogSize = 1048576; // 1MB default
     private boolean clusterEnabled = false;
 
+    // ── Dashboard ──
+    private int dashboardPort = 8080;
+    private boolean dashboardEnabled = true;
+
     // ── Expiry ──
     private int activeExpiryIntervalMs = 100;   // Run active expiry every 100ms
     private int activeExpirySampleSize = 20;      // Sample 20 keys per cycle
@@ -245,5 +249,21 @@ public class ServerConfig {
 
     public void setAofRewriteGrowthPercent(int aofRewriteGrowthPercent) {
         this.aofRewriteGrowthPercent = aofRewriteGrowthPercent;
+    }
+
+    public int getDashboardPort() {
+        return dashboardPort;
+    }
+
+    public void setDashboardPort(int dashboardPort) {
+        this.dashboardPort = dashboardPort;
+    }
+
+    public boolean isDashboardEnabled() {
+        return dashboardEnabled;
+    }
+
+    public void setDashboardEnabled(boolean dashboardEnabled) {
+        this.dashboardEnabled = dashboardEnabled;
     }
 }

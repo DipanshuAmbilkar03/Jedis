@@ -144,6 +144,13 @@ public class RedisServer {
         return connectionManager.getActiveConnectionsCount();
     }
 
+    /**
+     * Get the connection manager.
+     */
+    public ConnectionManager getConnectionManager() {
+        return connectionManager;
+    }
+
     private void printBanner() {
         System.out.println("""
                 
