@@ -98,6 +98,25 @@ export default function App() {
     }
   }, [terminalLines]);
 
+  // Scroll Reveal Observer for landing page transitions
+  useEffect(() => {
+    if (view !== 'landing') return;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    const elements = document.querySelectorAll('.reveal-on-scroll');
+    elements.forEach(el => observer.observe(el));
+
+    return () => {
+      elements.forEach(el => observer.unobserve(el));
+    };
+  }, [view]);
+
   // Format memory bytes
   const formatBytes = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -409,19 +428,19 @@ export default function App() {
           <section className="hero-section">
             <div className="hero-glow"></div>
             <div className="container hero-content">
-              <div className="hero-badge">
+              <div className="hero-badge animate-fade-in">
                 <span className="badge-dot"></span>
                 <span>Pure Java • RESP2 Compatible</span>
               </div>
-              <h1 className="hero-title">
+              <h1 className="hero-title animate-slide-up">
                 Build Your Own <br />
                 <span className="text-gradient">Redis Clone in Java</span>
               </h1>
-              <p className="hero-subtitle">
+              <p className="hero-subtitle animate-slide-up" style={{ animationDelay: '0.1s' }}>
                 A high-performance in-memory database built from scratch using the JDK, supporting 
                 persistence, NIO event loops, pub/sub channels, off-heap memory, and ACL configurations.
               </p>
-              <div className="hero-actions">
+              <div className="hero-actions animate-slide-up" style={{ animationDelay: '0.2s' }}>
                 <button className="btn btn-primary" onClick={() => setView('dashboard')}>
                   Open Admin Dashboard
                 </button>
@@ -431,7 +450,7 @@ export default function App() {
               </div>
 
               {/* Stats */}
-              <div className="hero-stats">
+              <div className="hero-stats animate-slide-up" style={{ animationDelay: '0.3s' }}>
                 <div className="stat">
                   <span className="stat-number">
                     {isLive ? serverInfo.keys : Object.keys(demoDb).length}
@@ -458,7 +477,7 @@ export default function App() {
           </section>
 
           {/* FEATURES SECTION */}
-          <section className="section-wrapper" id="features">
+          <section className="section-wrapper reveal-on-scroll" id="features">
             <div className="container">
               <div className="section-header">
                 <span class="section-tag">Core Capabilities</span>
@@ -513,7 +532,7 @@ export default function App() {
           </section>
 
           {/* INTERACTIVE CLI DEMO */}
-          <section className="section-wrapper">
+          <section className="section-wrapper reveal-on-scroll">
             <div className="container">
               <div className="section-header">
                 <span class="section-tag">Interactive CLI</span>
@@ -610,7 +629,7 @@ export default function App() {
           </section>
 
           {/* QUICKSTART / CTA */}
-          <section className="section-wrapper" id="quickstart">
+          <section className="section-wrapper reveal-on-scroll" id="quickstart">
             <div className="container">
               <div className="cta-card">
                 <div className="cta-glow"></div>
