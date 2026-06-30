@@ -57,9 +57,28 @@ public class MiniRedisApplication {
         persistenceManager.startPeriodicSnapshots();
         persistenceManager.startAofAutoRewrite();
 
+        // ── Start Dashboard Server ──
+        com.miniredis.dashboard.DashboardServer dashboardServer = null;
+        if (config.isDashboardEnabled()) {
+            try {
+                dashboardServer = new com.miniredis.dashboard.DashboardServer(
+                    config.getDashboardPort(), dataStore, commandRouter, config,
+                    server.getConnectionManager(), pubSubManager, persistenceManager
+                );
+                dashboardServer.start();
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to start Dashboard: " + e.getMessage());
+            }
+        }
+
+        final com.miniredis.dashboard.DashboardServer finalDashboard = dashboardServer;
+
         // ── Shutdown Hook ──
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n🔴 Received shutdown signal...");
+            if (finalDashboard != null) {
+                finalDashboard.stop();
+            }
             server.stop();
             dataStore.getExpiryManager().stop();
             persistenceManager.shutdown();
@@ -88,6 +107,12 @@ public class MiniRedisApplication {
                         config.setPort(Integer.parseInt(args[++i]));
                     }
                 }
+                case "--dashboard-port" -> {
+                    if (i + 1 < args.length) {
+                        config.setDashboardPort(Integer.parseInt(args[++i]));
+                    }
+                }
+                case "--no-dashboard" -> config.setDashboardEnabled(false);
                 case "--dir" -> {
                     if (i + 1 < args.length) {
                         config.setDataDir(args[++i]);
@@ -151,11 +176,13 @@ public class MiniRedisApplication {
                 Usage: java -jar mini-redis-1.0.jar [options]
                 
                 Options:
-                  --port, -p <port>    Set server port (default: 6380)
-                  --dir <path>         Set data directory (default: data)
-                  --no-aof             Disable AOF persistence
-                  --no-rdb             Disable RDB snapshots
-                  --help, -h           Show this help message
+                  --port, -p <port>          Set server port (default: 6380)
+                  --dashboard-port <port>    Set dashboard port (default: 8080)
+                  --no-dashboard             Disable dashboard server
+                  --dir <path>               Set data directory (default: data)
+                  --no-aof                   Disable AOF persistence
+                  --no-rdb                   Disable RDB snapshots
+                  --help, -h                 Show this help message
                 
                 Examples:
                   java -jar mini-redis-1.0.jar
