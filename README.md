@@ -1,12 +1,22 @@
-# 🔴 Jedis In-Memory Database & Web Console
+# Jedis In-Memory Database & Web Console
 
-> A high-performance, concurrent, in-memory key-value database engine built from the ground up in **pure Java (zero external dependencies)**, featuring a modern React-based **built-in web admin dashboard console**.
+```
+        ██╗███████╗██████╗ ██╗███████╗    ██████╗ ██████╗ 
+        ██║██╔════╝██╔══██╗██║██╔════╝    ██╔══██╗██╔══██╗
+        ██║█████╗  ██║  ██║██║███████╗    ██║  ██║██████╔╝
+   ██   ██║██╔══╝  ██║  ██║██║╚════██║    ██║  ██║██╔══██╗
+   ╚█████╔╝███████╗██████╔╝██║███████║    ██████╔╝██████╔╝
+    ╚════╝ ╚══════╝╚═════╝ ╚═╝╚══════╝    ╚═════╝ ╚═════╝ 
+                   in-memory database engine
+```
+
+> A high-performance, concurrent, in-memory key-value database engine built from the ground up in **pure Java ☕ (zero external dependencies)**, featuring a modern React-based **built-in web admin dashboard console**.
 
 This repository is split into two primary components: the backend Java database engine (`mini-redis`) and the React-based developer administration console (`frontend`).
 
 ---
 
-## 🏗️ System Architecture Overview
+## System Architecture Overview
 
 The system is designed to run as a single process with zero configuration. The React frontend is compiled into a single self-contained HTML page and embedded directly into the Java executable JAR so that the database and its control console are delivered as a single package.
 
@@ -43,14 +53,14 @@ The system is designed to run as a single process with zero configuration. The R
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 * **[`/mini-redis`](file:///d:/project/java%20project/mini-redis)**: The backend Java source code. Built from first principles, utilizing non-blocking sockets, a thread-per-client model, and custom expiration/persistence tasks.
 * **[`/frontend`](file:///d:/project/java%20project/frontend)**: A React + Vite dashboard styled with premium glassmorphism. It includes real-time telemetry gauges, a searchable key explorer, a visual add-key editor, and an interactive web terminal shell.
 
 ---
 
-## 🚀 Quick Start (Build & Run)
+##  Quick Start (Build & Run)
 
 To compile and start both the backend server and the embedded web console, follow these simple steps:
 
