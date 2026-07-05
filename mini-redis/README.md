@@ -6,7 +6,7 @@ It implements the real Redis **RESP2 wire protocol**, making it compatible out-o
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 The database engine is built around a concurrent storage engine with modular subsystems for connection handling, command routing, wire serialization, expiration policies, and active disk persistence.
 
@@ -52,7 +52,7 @@ The database engine is built around a concurrent storage engine with modular sub
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 * **Zero External Dependencies** — Written using standard JDK classes from first principles (sockets, threads, locking, concurrency).
 * **RESP2 Compatibility** — Full compliance with Redis RESP2. Test it by pointing your browser, `redis-cli`, or external Java libraries directly to port `6380`.
@@ -65,7 +65,7 @@ The database engine is built around a concurrent storage engine with modular sub
 
 ---
 
-## 🛠️ Technical Stack
+##  Technical Stack
 
 * **Language**: Java 25 (using modern features like record types, pattern matching, text blocks)
 * **Concurrency**: `ConcurrentHashMap`, `ReentrantReadWriteLock`, `ScheduledExecutorService`
@@ -74,7 +74,7 @@ The database engine is built around a concurrent storage engine with modular sub
 
 ---
 
-## 📁 Directory Structure
+## Directory Structure
 
 ```
 mini-redis/
@@ -100,9 +100,9 @@ mini-redis/
 
 ---
 
-## ⚙️ Supported Commands
+##  Supported Commands
 
-### 📝 Strings
+###  Strings
 * `SET key value [EX seconds] [PX ms] [NX|XX]`
 * `GET key`
 * `MSET key value [key value ...]`
@@ -110,24 +110,24 @@ mini-redis/
 * `INCR key`
 * `DECR key`
 
-### 📋 Lists
+### Lists
 * `LPUSH key value [value ...]`
 * `RPUSH key value [value ...]`
 * `LPOP key`
 * `RPOP key`
 * `LRANGE key start stop`
 
-### 👥 Sets
+### Sets
 * `SADD key member [member ...]`
 * `SMEMBERS key`
 * `SREM key member [member ...]`
 
-### 🔍 Hashes
+### Hashes
 * `HSET key field value [field value ...]`
 * `HGET key field`
 * `HGETALL key`
 
-### 🔑 Key Management
+### Key Management
 * `DEL key [key ...]`
 * `EXPIRE key seconds`
 * `TTL key`
@@ -135,17 +135,17 @@ mini-redis/
 * `TYPE key`
 * `KEYS pattern` (Supports glob matching: `*`, `?`)
 
-### 🤝 Transactions
+### Transactions
 * `MULTI` (Enter transaction mode / queue commands)
 * `EXEC` (Execute queued commands atomically)
 * `DISCARD` (Discard queued commands)
 
-### 📣 Pub/Sub
+### Pub/Sub
 * `SUBSCRIBE channel [channel ...]`
 * `PUBLISH channel message`
 * `UNSUBSCRIBE [channel ...]`
 
-### ⚙️ Server Management
+### Server Management
 * `PING [message]`
 * `ECHO message`
 * `INFO`
@@ -154,7 +154,7 @@ mini-redis/
 
 ---
 
-## ⚡ How to Build and Run
+### How to Build and Run
 
 ### 1. Compile and Run Tests
 Ensure you have JDK 25 and Maven installed:
