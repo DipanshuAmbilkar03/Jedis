@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // Frame ranges for automatic loop narrative sections
@@ -52,6 +52,8 @@ export default function App() {
   ]);
   const [dbState, setDbState] = useState({});
   const terminalEndRef = useRef(null);
+  const terminalScreenRef = useRef(null);
+  const hasMountedCliRef = useRef(false);
 
   const canvasRef = useRef(null);
   const imagesRef = useRef([]);
@@ -232,8 +234,34 @@ export default function App() {
     return () => observer.disconnect();
   }, [isLoading]);
 
+  // Keep the landing page at the top on first open (ignore browser scroll restoration / hash).
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
+  // After preloader unmounts, layout expands — pin viewport to the hero again.
+  useEffect(() => {
+    if (isLoading) return;
+    window.scrollTo(0, 0);
+    const id = window.requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => window.cancelAnimationFrame(id);
+  }, [isLoading]);
+
+  // Scroll only inside the terminal panel — never the document.
+  useEffect(() => {
+    if (!hasMountedCliRef.current) {
+      hasMountedCliRef.current = true;
+      return;
+    }
+    const screen = terminalScreenRef.current;
+    if (!screen) return;
+    screen.scrollTop = screen.scrollHeight;
   }, [cliLogs]);
 
   const handleCliSubmit = (e) => {
@@ -632,7 +660,7 @@ export default function App() {
                 </div>
                 <span className="terminal-path">jedis · simulated</span>
               </div>
-              <div className="terminal-screen">
+              <div className="terminal-screen" ref={terminalScreenRef}>
                 {cliLogs.map((log, idx) => (
                   <div key={idx} className={`t-line t-${log.type}`}>
                     {log.text}
