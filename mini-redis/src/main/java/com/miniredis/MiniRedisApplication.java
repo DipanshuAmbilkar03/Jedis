@@ -26,7 +26,24 @@ public class MiniRedisApplication {
     }
 
     public static void main(String[] args) {
-        System.out.println("🔴 Starting Mini Redis...");
+        System.out.println("🔴 Starting Jedis In-Memory Database...");
+        System.out.println("""
+                
+                ==================================================================================================
+                Jedis is a high-performance, concurrent, in-memory key-value database engine built from scratch
+                in pure Java (zero external dependencies), featuring a modern React-based web admin dashboard.
+                ==================================================================================================
+                
+                      ___  ________  ________  ___  ________      ________  ________     
+                     |\\  \\|\\   ____\\|\\   __  \\|\\  \\|\\   ____\\    |\\   ___ \\|\\   __  \\    
+                     \\ \\  \\ \\  \\___|\\ \\  \\|\\  \\ \\  \\ \\  \\___|    \\ \\  \\_|\\ \\ \\  \\|\\  \\   
+                   __ \\ \\  \\ \\  \\    \\ \\  \\\\\\  \\ \\  \\ \\_____  \\    \\ \\  \\ \\\\ \\ \\  __  \\  
+                  |\\  \\\\_\\  \\ \\  \\____\\ \\  \\\\\\  \\ \\  \\ \\|____|\\  \\   \\ \\  \\_/ \\ \\  \\|\\  \\ 
+                  \\ \\________\\ \\_______\\ \\_______\\ \\__\\____\\_\\  \\   \\ \\_______\\ \\_______\\
+                   \\|________|\\|_______|\\|_______|\\|__|\\_________\\   \\|_______|\\|_______|
+                                                      \\|_________|                       
+                                                 in-memory database engine
+                """);
 
         // ── Configuration ──
         ServerConfig config = new ServerConfig();
@@ -82,7 +99,7 @@ public class MiniRedisApplication {
             server.stop();
             dataStore.getExpiryManager().stop();
             persistenceManager.shutdown();
-            System.out.println("🔴 Mini Redis stopped. Goodbye!");
+            System.out.println("🔴 Jedis stopped. Goodbye!");
         }));
 
         // ── Start TCP Server (blocking) ──

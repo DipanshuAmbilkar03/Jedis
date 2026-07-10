@@ -52,7 +52,7 @@ public class ApiHandler implements HttpHandler {
         }
 
         try {
-            if ("/".equals(path) && "GET".equalsIgnoreCase(method)) {
+            if (("/".equals(path) || "/admin".equals(path)) && "GET".equalsIgnoreCase(method)) {
                 handleHtml(exchange);
             } else if ("/api/info".equals(path) && "GET".equalsIgnoreCase(method)) {
                 handleInfo(exchange);

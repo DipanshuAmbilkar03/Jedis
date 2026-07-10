@@ -251,7 +251,6 @@
   ];
 
   let terminalAnimated = false;
-  let terminalLineIndex = 0;
 
   function typeTerminalLine(lineDiv, text, speed = 20) {
     return new Promise((resolve) => {
