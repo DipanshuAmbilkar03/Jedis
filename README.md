@@ -98,3 +98,18 @@ To compile and start both the backend server and the embedded web console, follo
 For detailed specifications of the backend database or frontend dashboard, view the READMEs in their respective directories:
 - [Backend (mini-redis) Specification](file:///d:/project/java%20project/mini-redis/README.md)
 - [Frontend (React + Vite Console) Guide](file:///d:/project/java%20project/frontend/README.md)
+
+
+---
+
+## Marketing Landing Page (Separate Module)
+
+The product marketing page lives at `UI/landingPage` and is **not** part of the embedded dashboard build.
+
+```bash
+cd UI/landingPage
+npm install
+npm run dev
+```
+
+See `UI/landingPage/README.md` for details. It does not share code or build steps with `/frontend` or `/mini-redis`.

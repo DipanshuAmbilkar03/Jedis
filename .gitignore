@@ -3,5 +3,15 @@ PROJECT_DESCRIPTION.md
 webImplementation.md
 temp_assets/
 temp_Frames/
+
+# Keep raw UI design assets private, but track the standalone landing module.
 /UI/*
 !/UI/Frames/
+!/UI/landingPage/
+!/UI/landingPage/**
+
+# Always ignore build/install artifacts under the landing module.
+UI/landingPage/node_modules/
+UI/landingPage/dist/
+UI/landingPage/dist-ssr/
+UI/landingPage/*.local
