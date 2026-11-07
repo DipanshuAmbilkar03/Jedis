@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
+const TOKEN_KEY = 'jedis_dashboard_token';
+
+const apiFetch = (path, options = {}) => {
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(path, { ...options, headers });
+};
+
 // ── Background Frame Animation Canvas ──
 function BackgroundAnimation() {
   const canvasRef = useRef(null);
@@ -97,7 +106,6 @@ export default function App() {
   const isPlayInitial = useRef(true);
 
   // Login Form States
-  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
@@ -105,7 +113,9 @@ export default function App() {
   const [currentMode, setCurrentMode] = useState(() => {
     const path = window.location.pathname;
     if (path.startsWith('/admin')) {
-      return localStorage.getItem('jedis_admin_logged_in') === 'true' ? 'admin' : 'login';
+      const authed = localStorage.getItem('jedis_admin_logged_in') === 'true'
+        && sessionStorage.getItem(TOKEN_KEY);
+      return authed ? 'admin' : 'login';
     }
     return 'user';
   });
@@ -174,7 +184,8 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      const authed = localStorage.getItem('jedis_admin_logged_in') === 'true';
+      const authed = localStorage.getItem('jedis_admin_logged_in') === 'true'
+        && sessionStorage.getItem(TOKEN_KEY);
       if (path.startsWith('/admin')) {
         setCurrentMode(authed ? 'admin' : 'login');
       } else {
@@ -188,7 +199,7 @@ export default function App() {
   // Check connection to Java backend
   const checkConnection = useCallback(async () => {
     try {
-      const res = await fetch('/api/info');
+      const res = await apiFetch('/api/info');
       if (res.ok) {
         const data = await res.json();
         setServerInfo(data);
@@ -205,7 +216,7 @@ export default function App() {
   const fetchKeys = useCallback(async () => {
     if (!isLive) return;
     try {
-      const res = await fetch('/api/keys');
+      const res = await apiFetch('/api/keys');
       if (res.ok) {
         const data = await res.json();
         setKeysList(data.keys || []);
@@ -395,7 +406,7 @@ export default function App() {
 
     if (isLive) {
       try {
-        const res = await fetch('/api/command', {
+        const res = await apiFetch('/api/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: trimmedCmd })
@@ -454,7 +465,7 @@ export default function App() {
 
     if (isLive) {
       try {
-        const res = await fetch('/api/command', {
+        const res = await apiFetch('/api/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: trimmedCmd })
@@ -490,7 +501,7 @@ export default function App() {
 
     if (isLive) {
       try {
-        const res = await fetch('/api/key', {
+        const res = await apiFetch('/api/key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: newKey, value: newVal, ttl: parseInt(newTtl) })
@@ -522,7 +533,7 @@ export default function App() {
 
     if (isLive) {
       try {
-        const res = await fetch(`/api/key?key=${encodeURIComponent(key)}`, {
+        const res = await apiFetch(`/api/key?key=${encodeURIComponent(key)}`, {
           method: 'DELETE'
         });
         if (res.ok) {
@@ -575,21 +586,34 @@ export default function App() {
   };
 
   // Handle Admin Authentication Login
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (usernameInput.trim() === 'admin' && passwordInput === 'admin') {
+    const token = passwordInput.trim();
+    if (!token) {
+      setLoginError('Enter the access token printed in the server console.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/info', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        setLoginError('Invalid access token.');
+        return;
+      }
+      sessionStorage.setItem(TOKEN_KEY, token);
       localStorage.setItem('jedis_admin_logged_in', 'true');
-      navigateTo('admin', '/admin');
-      setUsernameInput('');
       setPasswordInput('');
       setLoginError('');
-    } else {
-      setLoginError('Invalid username or password credentials. Hint: use admin/admin');
+      navigateTo('admin', '/admin');
+    } catch {
+      setLoginError('Cannot reach the server.');
     }
   };
 
   // Handle Admin Log Out
   const handleLogout = () => {
+    sessionStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem('jedis_admin_logged_in');
     navigateTo('user', '/');
   };
@@ -918,29 +942,17 @@ OK
               <span className="brand-logo-text">Jedis Console</span>
             </div>
             
-            <p className="login-desc">Authenticate to access the server administration console.</p>
+            <p className="login-desc">Paste the dashboard access token printed in the server console.</p>
 
             <form onSubmit={handleLoginSubmit} className="login-form">
               {loginError && <div className="login-error-msg">⚠️ {loginError}</div>}
               
               <div className="form-group">
-                <label>Username</label>
-                <input
-                  type="text"
-                  className="login-control-input"
-                  placeholder="Enter your username"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Password</label>
+                <label>Access token</label>
                 <input
                   type="password"
                   className="login-control-input"
-                  placeholder="Enter your password"
+                  placeholder="Paste the access token"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   required

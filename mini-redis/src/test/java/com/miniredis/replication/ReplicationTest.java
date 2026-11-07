@@ -44,7 +44,7 @@ public class ReplicationTest {
         DataStore dataStore = new DataStore();
         PubSubManager pubSub = new PubSubManager();
         PersistenceManager pm = new PersistenceManager(config, dataStore);
-        CommandRouter router = new CommandRouter(dataStore, pubSub, pm);
+        CommandRouter router = new CommandRouter(dataStore, pubSub, pm, null, true);
         ReplicationManager repManager = new ReplicationManager(config);
         router.setReplicationManager(repManager);
 

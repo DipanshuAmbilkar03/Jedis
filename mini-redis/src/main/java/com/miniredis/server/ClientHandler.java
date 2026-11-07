@@ -84,7 +84,8 @@ public class ClientHandler implements Runnable {
         this.connected = true;
         this.connectedAt = System.currentTimeMillis();
         this.lastActivityTime = System.currentTimeMillis();
-        this.authenticatedUser = commandRouter != null ? commandRouter.getAclManager().getUser("default") : null;
+        this.authenticatedUser = commandRouter != null && !commandRouter.getAclManager().isAuthRequired()
+                ? commandRouter.getAclManager().getUser("default") : null;
         String address = "unknown";
         if (socket != null) {
             address = socket.getRemoteSocketAddress().toString();
@@ -109,7 +110,8 @@ public class ClientHandler implements Runnable {
         this.connected = true;
         this.connectedAt = System.currentTimeMillis();
         this.lastActivityTime = System.currentTimeMillis();
-        this.authenticatedUser = commandRouter != null ? commandRouter.getAclManager().getUser("default") : null;
+        this.authenticatedUser = commandRouter != null && !commandRouter.getAclManager().isAuthRequired()
+                ? commandRouter.getAclManager().getUser("default") : null;
         String address = "unknown";
         if (socketChannel != null) {
             try {

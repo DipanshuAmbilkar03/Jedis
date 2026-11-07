@@ -88,12 +88,22 @@ To compile and start both the backend server and the embedded web console, follo
 
 3. **Access the Console**:
    - Open your browser to [http://localhost:8080](http://localhost:8080) for the public landing page and interactive database playground.
-   - Go to [http://localhost:8080/admin](http://localhost:8080/admin) to log in as admin (Credentials: `admin` / `admin`) and manage the live database.
+   - Go to [http://localhost:8080/admin](http://localhost:8080/admin) and paste the **dashboard access token** printed in the server console.
+   - The dashboard binds to `127.0.0.1` by default. Set `JEDIS_DASHBOARD_BIND=0.0.0.0` only if you intend remote access.
 
 4. **Connect with `redis-cli`**:
    ```bash
    redis-cli -p 6380
+   AUTH <the default-user password printed at startup>
    ```
+
+### Security defaults
+
+- The server generates a random default-user password on startup and prints it once. Clients must `AUTH` before running commands.
+- Pass `--requirepass <password>` or set `JEDIS_DEFAULT_PASSWORD` for a stable password.
+- The dashboard requires a bearer token and binds to loopback by default. Override the token with `JEDIS_DASHBOARD_TOKEN`.
+- `--insecure-no-auth` disables authentication. Use it only in an isolated development environment.
+- Report vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
 For detailed specifications of the backend database or frontend dashboard, view the READMEs in their respective directories:
 - [Backend (mini-redis) Specification](file:///d:/project/java%20project/mini-redis/README.md)

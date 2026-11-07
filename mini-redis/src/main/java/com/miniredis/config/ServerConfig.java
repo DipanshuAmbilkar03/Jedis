@@ -38,6 +38,10 @@ public class ServerConfig {
     private int dashboardPort = 8080;
     private boolean dashboardEnabled = true;
 
+    // ── Security ──
+    private String requirepass;
+    private boolean allowPasswordless;
+
     // ── Expiry ──
     private int activeExpiryIntervalMs = 100;   // Run active expiry every 100ms
     private int activeExpirySampleSize = 20;      // Sample 20 keys per cycle
@@ -265,5 +269,21 @@ public class ServerConfig {
 
     public void setDashboardEnabled(boolean dashboardEnabled) {
         this.dashboardEnabled = dashboardEnabled;
+    }
+
+    public String getRequirepass() {
+        return requirepass;
+    }
+
+    public void setRequirepass(String requirepass) {
+        this.requirepass = requirepass;
+    }
+
+    public boolean isAllowPasswordless() {
+        return allowPasswordless;
+    }
+
+    public void setAllowPasswordless(boolean allowPasswordless) {
+        this.allowPasswordless = allowPasswordless;
     }
 }

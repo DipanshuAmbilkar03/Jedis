@@ -56,7 +56,7 @@ public class ClusterTest {
         DataStore dataStore = new DataStore();
         PubSubManager pubSub = new PubSubManager();
         PersistenceManager pm = new PersistenceManager(config, dataStore);
-        CommandRouter router = new CommandRouter(dataStore, pubSub, pm);
+        CommandRouter router = new CommandRouter(dataStore, pubSub, pm, null, true);
         ClusterManager manager = new ClusterManager(config);
         router.setClusterManager(manager);
 
