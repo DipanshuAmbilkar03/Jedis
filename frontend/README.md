@@ -8,7 +8,7 @@ A modern, single-page web administration dashboard for the Jedis Database. Style
 
 This directory contains the React + Vite frontend source code. The dashboard operates in two modes:
 1. **Public Landing Page Mode**: A detailed product landing page detailing the database architecture, features, and an **embedded interactive playground shell** to try out RESP2 commands locally or against a live local server.
-2. **Developer Admin Console Mode** (accessed via `/admin`, login: `admin`/`admin`): A private, live dashboard showing system health charts, key storage tables, and shell terminals.
+2. **Developer Admin Console Mode** (accessed via `/admin`, using the dashboard access token printed in the server console): A private, live dashboard showing system health charts, key storage tables, and shell terminals.
 
 ---
 

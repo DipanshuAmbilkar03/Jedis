@@ -30,9 +30,14 @@ public class CommandRouter {
     private final AclManager aclManager;
 
     public CommandRouter(DataStore dataStore, PubSubManager pubSubManager, PersistenceManager persistenceManager) {
+        this(dataStore, pubSubManager, persistenceManager, null, false);
+    }
+
+    public CommandRouter(DataStore dataStore, PubSubManager pubSubManager, PersistenceManager persistenceManager,
+                         String defaultPassword, boolean allowPasswordlessDefault) {
         this.handlers = new HashMap<>();
         this.dataStore = dataStore;
-        this.aclManager = new AclManager();
+        this.aclManager = new AclManager(defaultPassword, allowPasswordlessDefault);
         registerAllCommands(dataStore, pubSubManager, persistenceManager);
     }
 
@@ -65,7 +70,8 @@ public class CommandRouter {
      */
     public String execute(Command command, com.miniredis.server.ClientHandler client) {
         AclUser user = client != null ? client.getAuthenticatedUser() : aclManager.getUser("default");
-        if (!aclManager.isAllowed(user, command.name())) {
+        boolean authenticationCommand = "AUTH".equals(command.name());
+        if (!authenticationCommand && !aclManager.isAllowed(user, command.name())) {
             return RespEncoder.encodeError("NOPERM this user has no permissions to run the '" + command.name().toLowerCase() + "' command");
         }
 

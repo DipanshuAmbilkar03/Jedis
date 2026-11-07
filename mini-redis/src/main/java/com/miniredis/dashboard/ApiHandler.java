@@ -11,6 +11,8 @@ import com.miniredis.persistence.PersistenceManager;
 
 import java.io.*;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -19,22 +21,28 @@ import java.util.regex.Pattern;
 
 public class ApiHandler implements HttpHandler {
 
+    private static final int MAX_BODY_BYTES = 1024 * 1024;
+
     private final DataStore dataStore;
     private final CommandRouter commandRouter;
     private final ServerConfig config;
     private final ConnectionManager connectionManager;
     private final PubSubManager pubSubManager;
     private final PersistenceManager persistenceManager;
+    private final String token;
+    private final String allowedOrigin;
 
     public ApiHandler(DataStore dataStore, CommandRouter commandRouter, ServerConfig config,
                       ConnectionManager connectionManager, PubSubManager pubSubManager,
-                      PersistenceManager persistenceManager) {
+                      PersistenceManager persistenceManager, String token, String allowedOrigin) {
         this.dataStore = dataStore;
         this.commandRouter = commandRouter;
         this.config = config;
         this.connectionManager = connectionManager;
         this.pubSubManager = pubSubManager;
         this.persistenceManager = persistenceManager;
+        this.token = token;
+        this.allowedOrigin = allowedOrigin;
     }
 
     @Override
@@ -42,12 +50,15 @@ public class ApiHandler implements HttpHandler {
         String path = exchange.getRequestURI().getPath();
         String method = exchange.getRequestMethod();
 
-        // Handle CORS preflight options
         if ("OPTIONS".equalsIgnoreCase(method)) {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            applyCors(exchange);
+            exchange.getResponseHeaders().set("Allow", "GET, POST, DELETE, OPTIONS");
             exchange.sendResponseHeaders(204, -1);
+            return;
+        }
+
+        if ((path.startsWith("/api/") || "/api".equals(path)) && !isAuthorized(exchange)) {
+            sendUnauthorized(exchange);
             return;
         }
 
@@ -67,6 +78,8 @@ public class ApiHandler implements HttpHandler {
             } else {
                 sendJsonResponse(exchange, 404, "{\"error\": \"Not Found\"}");
             }
+        } catch (PayloadTooLargeException e) {
+            sendJsonResponse(exchange, 413, "{\"error\": \"Request body too large\"}");
         } catch (Exception e) {
             String errorJson = "{\"error\": \"" + escapeJson(e.getMessage()) + "\"}";
             sendJsonResponse(exchange, 500, errorJson);
@@ -75,9 +88,9 @@ public class ApiHandler implements HttpHandler {
 
     private void handleHtml(HttpExchange exchange) throws IOException {
         String html = DashboardHtml.getHtml();
-        byte[] bytes = html.getBytes("UTF-8");
+        byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        applyCors(exchange);
         exchange.sendResponseHeaders(200, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
@@ -174,9 +187,7 @@ public class ApiHandler implements HttpHandler {
         com.miniredis.command.Command command = com.miniredis.command.Command.from(rawArgs);
         
         // Execute through a mock client handler
-        com.miniredis.server.ClientHandler mockClient = new com.miniredis.server.ClientHandler(
-            (java.net.Socket) null, commandRouter, pubSubManager, persistenceManager, commandRouter.getReplicationManager()
-        );
+        com.miniredis.server.ClientHandler mockClient = newMockClient();
 
         try {
             String resp = mockClient.processCommand(command);
@@ -220,9 +231,7 @@ public class ApiHandler implements HttpHandler {
         }
 
         com.miniredis.command.Command command = com.miniredis.command.Command.from(rawArgs);
-        com.miniredis.server.ClientHandler mockClient = new com.miniredis.server.ClientHandler(
-            (java.net.Socket) null, commandRouter, pubSubManager, persistenceManager, commandRouter.getReplicationManager()
-        );
+        com.miniredis.server.ClientHandler mockClient = newMockClient();
 
         try {
             String resp = mockClient.processCommand(command);
@@ -261,9 +270,7 @@ public class ApiHandler implements HttpHandler {
         rawArgs.add(key);
 
         com.miniredis.command.Command command = com.miniredis.command.Command.from(rawArgs);
-        com.miniredis.server.ClientHandler mockClient = new com.miniredis.server.ClientHandler(
-            (java.net.Socket) null, commandRouter, pubSubManager, persistenceManager, commandRouter.getReplicationManager()
-        );
+        com.miniredis.server.ClientHandler mockClient = newMockClient();
 
         try {
             String resp = mockClient.processCommand(command);
@@ -284,27 +291,84 @@ public class ApiHandler implements HttpHandler {
     // ── Helper Methods ──
 
     private void sendJsonResponse(HttpExchange exchange, int status, String json) throws IOException {
-        byte[] bytes = json.getBytes("UTF-8");
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+        applyCors(exchange);
         exchange.sendResponseHeaders(status, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(bytes);
         }
     }
 
+    private void applyCors(HttpExchange exchange) {
+        if (allowedOrigin == null) {
+            return;
+        }
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin == null || !origin.equals(allowedOrigin)) {
+            return;
+        }
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
+        exchange.getResponseHeaders().set("Vary", "Origin");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    }
+
+    private boolean isAuthorized(HttpExchange exchange) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        String header = exchange.getRequestHeaders().getFirst("Authorization");
+        if (header == null || !header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return false;
+        }
+        String provided = header.substring(7).trim();
+        return MessageDigest.isEqual(
+                provided.getBytes(StandardCharsets.UTF_8),
+                token.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+
+    private void sendUnauthorized(HttpExchange exchange) throws IOException {
+        exchange.getResponseHeaders().set("WWW-Authenticate", "Bearer");
+        sendJsonResponse(exchange, 401, "{\"error\": \"Unauthorized\"}");
+    }
+
+    private com.miniredis.server.ClientHandler newMockClient() {
+        com.miniredis.server.ClientHandler client = new com.miniredis.server.ClientHandler(
+                (java.net.Socket) null, commandRouter, pubSubManager, persistenceManager,
+                commandRouter.getReplicationManager()
+        );
+        client.setAuthenticatedUser(commandRouter.getAclManager().getUser("default"));
+        return client;
+    }
+
     private String readBody(HttpExchange exchange) throws IOException {
+        String contentLength = exchange.getRequestHeaders().getFirst("Content-Length");
+        if (contentLength != null) {
+            try {
+                if (Long.parseLong(contentLength) > MAX_BODY_BYTES) {
+                    throw new PayloadTooLargeException();
+                }
+            } catch (NumberFormatException ignored) {
+                // Fall through to the streaming limit.
+            }
+        }
         try (InputStream is = exchange.getRequestBody();
              ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[8192];
             int len;
             while ((len = is.read(buffer)) != -1) {
                 bos.write(buffer, 0, len);
+                if (bos.size() > MAX_BODY_BYTES) {
+                    throw new PayloadTooLargeException();
+                }
             }
-            return bos.toString("UTF-8");
+            return bos.toString(StandardCharsets.UTF_8);
         }
+    }
+
+    private static final class PayloadTooLargeException extends IOException {
     }
 
     private static String getJsonKeyValue(String json, String key) {

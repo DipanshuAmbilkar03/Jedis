@@ -16,7 +16,7 @@ public class ListCommandsTest {
     @BeforeEach
     public void setUp() {
         store = new DataStore();
-        router = new CommandRouter(store, null, null);
+        router = new CommandRouter(store, null, null, null, true);
     }
 
     @Test

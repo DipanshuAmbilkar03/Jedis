@@ -42,7 +42,7 @@ public class AclRedisIntegrationTest {
         DataStore dataStore = new DataStore();
         PubSubManager pubSubManager = new PubSubManager();
         PersistenceManager persistenceManager = new PersistenceManager(config, dataStore);
-        CommandRouter commandRouter = new CommandRouter(dataStore, pubSubManager, persistenceManager);
+        CommandRouter commandRouter = new CommandRouter(dataStore, pubSubManager, persistenceManager, null, true);
         
         server = new RedisServer(config, commandRouter, pubSubManager, persistenceManager);
 
